@@ -1,7 +1,7 @@
 <?php
 
 #
-# Copyright ( c) 2013 Layer7 BVBA
+# Copyright (c) 2013 Layer7 BVBA
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 # limitations under the License.
 #
 
+require_once('ApiException.php');
+
 class OvirtApi {
 
 	private $url;
@@ -29,40 +31,53 @@ class OvirtApi {
 	// private $export_name;
 	private $vm_name;
 
-	public function __construct () {
+	public function __construct ($url, $username, $password, $verify_ssl = true) {
 		// TODO: Remove before production
 		# Debug settings
-		ini_set('xdebug.var_display_max_depth', '10'); 
-		# Variables
-		$this->url = 'https://10.11.0.115/api/';
-		$this->username = 'admin@internal';
-		$this->password = 'W5UNJqFU';
+        if(extension_loaded('xdebug')) {
+            ini_set('xdebug.var_display_max_depth', '10');
+        }
+		try {
+            $this->url = $url;
+            $this->username = $username;
+            $this->password = $password;
+            $this->ovirt_ch = curl_init();
+            curl_setopt($this->ovirt_ch, CURLOPT_POST, false);
+            curl_setopt($this->ovirt_ch, CURLOPT_HEADER, 'application/xml');
+            curl_setopt($this->ovirt_ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($this->ovirt_ch, CURLOPT_USERPWD, $this->username . ':' . $this->password);
+            curl_setopt($this->ovirt_ch, CURLOPT_SSL_VERIFYPEER, $verify_ssl);
+        } catch (\Exception $e) {
+            throw new OvirtApiException('Could not connect to the API.');
+        }
 	}	
 
 	public function get_url() {
 		return preg_replace('/api\//', '', $this->url);
 	}
 
-	public function get_vms () {
+	public function getResource($resource = null) {
 
-		# Perform login request.
-		$ovirt_ch = curl_init();
-		curl_setopt($ovirt_ch, CURLOPT_URL, $this->url . 'vms');
-		curl_setopt($ovirt_ch, CURLOPT_POST, false);
-		curl_setopt($ovirt_ch, CURLOPT_HEADER, 'application/xml');
-		curl_setopt($ovirt_ch, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt($ovirt_ch, CURLOPT_USERPWD, $this->username . ':' . $this->password);
-		curl_setopt($ovirt_ch, CURLOPT_SSL_VERIFYPEER, false);
-		$response =  curl_exec($ovirt_ch);
+        if(is_null($resource)) {
+            throw new OvirtApiException('A resource is required');
+        }
+
+        try {
+            curl_setopt($this->ovirt_ch, CURLOPT_URL, $this->url . $resource);
+            $response =  curl_exec($this->ovirt_ch);
+        } catch (\Exception $e) {
+            throw new OvirtApiException('Failed to fetch resource from the API. Curl request failed');
+        }
 
 		# Parse response
-		$vms =  new SimpleXMLElement($response);
-
-		curl_close($ovirt_ch);
-		unset($ovirt_ch);
+        try {
+            $data =  new SimpleXMLElement($response);
+        } catch (\Exception $e) {
+            throw new OvirtApiException('Failed to parse the API response as XML');
+        }
 
 		# Dumps
-		// foreach($vms as $vm) {
+		// foreach($data as $vm) {
 		// 	echo '========== HREF ==========';
 		// 	var_dump($vm->attributes()->href);
 
@@ -82,7 +97,7 @@ class OvirtApi {
 		// 	var_dump($vm);
 		// } die();
 
-		return $vms;
+		return $data;
 	}
 
 	public function vm_action($action = null, $id = null){
@@ -154,10 +169,10 @@ class OvirtApi {
 		$xml = new SimpleXMLElement('<vm/>');
 		$name = $xml->addChild('name', $name);
 		$cluster = $xml->addChild('cluster');
-		$cluster->addChild('name', $cluster)
+		$cluster->addChild('name', $cluster);
 		$template = $xml->addChild('template');
-		$template->addChild('name', $template)
-		$memory = $xml->addChild('memory', $memory)
+		$template->addChild('name', $template);
+		$memory = $xml->addChild('memory', $memory);
 		$os = $vm->addChild('os');
 		$boot = $os->addChild('boot');
 		$boot->addAttribute('dev', $boot_dev);
@@ -183,5 +198,3 @@ class OvirtApi {
 	}
 
 }
-
-?>
