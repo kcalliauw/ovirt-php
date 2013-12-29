@@ -52,3 +52,13 @@ abstract class OvirtException extends Exception implements IException
         . "{$this->getTraceAsString()}";
     }
 }
+
+class NoCertificatesException extends OvirtException {}
+class UnsecuredConnectionAttemptException extends OvirtException {}
+class ImmutableException extends OvirtException {}
+class DisconnectedException extends OvirtException {}
+class MissingParametersException extends OvirtException {}
+class ConnectionException extends OvirtException {}
+class RequestException extends OvirtException {}
+class FormatException extends OvirtException {}
+class GeneralException extends OvirtException {}

@@ -16,6 +16,21 @@
 # limitations under the License.
 #
 
-require_once('Exception.php');
+class BaseObject
+{
 
-class OvirtApiException extends OvirtException {}
+    public $id;
+    public $href;
+    public $name;
+
+    public function __construct($id, $href, $name) {
+        $this->id = $id;
+        $this->href = $href;
+        $this->name = $name;
+    }
+
+    public function parseVersion($xml) {
+        $arr = (array)$xml;
+        return $arr['@attributes']['major'] . '.' . $arr['@attributes']['minor'];
+    }
+}

@@ -7,15 +7,29 @@
 </head>
 <body>
 <?php
-    require('Ovirt/Api.php');
 
-    $api        = new OvirtApi('https://10.6.0.200/api/', 'admin@internal', 'W5UNJqFU', false);
-    $vms        = $api->getResource('vms');
-    $clusters   = $api->getResource('clusters');
+    try {
+        require_once('library/Api.php');
+        require_once('library/UtilityFunctions.php');
+        $api        = new OvirtApi('https://10.6.0.200/api/', 'admin@internal', 'W5UNJqFU', true, null, null, false, false);
+        $vms        = $api->getResource('vms');
+        $clusters   = $api->getResource('clusters');
+        $api_version = $api->getApiVersion();
+        $dcs         = $api->getDatacenters();
+        $dc         = $api->getDatacenter('5849b030-626e-47cb-ad90-3ce782d831b3');
+
+    } catch (Exception $e) {
+        echo $e->getMessage();
+        die;
+    }
+
 
     if(isset($_POST["vm_action"])) {
         $api->vm_action($_POST);
     }
+
+    echo "<h1>oVirt User portal</h1>";
+    echo "oVirt version: ".$api_version;
 
     echo "<h3>List of virtual machines:</h3>";
     if(count((array)$vms)>0) {
@@ -63,6 +77,25 @@
     } else {
         echo "No clusters found";
     }
+
+    echo "<h3>List of datacenters:</h3>";
+    if(count((array)$dcs)>0) {
+        echo "<ul>";
+        foreach($dcs as $item) {
+            $description = (strlen($item->description) > 0) ? ' (' . $item->description . ')' : '';
+            $id = ' ( ID: ' . $item->id . ' )';
+            echo '<li>' . $item->name . $description . $id . '</li>';
+        }
+        echo "</ul>";
+        //d($dcs);
+    } else {
+        echo "No clusters found";
+    }
+
+    echo '<h3>Single datacenter info</h3>';
+    echo "Name: $dc->name<br />";
+    echo "Description: $dc->description<br />";
+    echo "Version: $dc->version<br />";
 ?>
 </body>
 </html>
