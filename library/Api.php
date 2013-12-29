@@ -19,6 +19,7 @@
 require_once('Exception.php');
 require_once('UtilityFunctions.php');
 require_once('Ovirt/DataCenter.php');
+require_once('Ovirt/Cluster.php');
 
 class OvirtApi
 {
@@ -126,7 +127,7 @@ class OvirtApi
 	}
 
     /**
-     * @return string|null
+     * @return DataCenter
      */
     public function getCurrentDatacenter() {
         if(is_null($this->datacenter_id)) {
@@ -146,13 +147,51 @@ class OvirtApi
         $response = $this->getResource(sprintf('datacenters?search=%s', urlencode($search)));
         $dcs = array();
         foreach($response->data_center as $dc) {
-            $dcs[] = new DataCenter($dc);
+            $dcs[] = new DataCenter($this, $dc);
         }
         return $dcs;
     }
 
+    /**
+     * @param $datacenter_id
+     * @return DataCenter
+     */
     public function getDatacenter($datacenter_id) {
-        return new DataCenter($this->getResource(sprintf('datacenters/%s', urlencode($datacenter_id))));
+        return new DataCenter($this, $this->getResource(sprintf('datacenters/%s', urlencode($datacenter_id))));
+    }
+
+    /**
+     * @return Cluster
+     */
+    public function getCurrentCluster() {
+        if(is_null($this->cluster_id)) {
+            $clusters = $this->getClusters();
+            return $clusters[0];
+        } else {
+            return $this->getCluster($this->cluster_id);
+        }
+    }
+
+    /**
+     * @param null $search
+     * @return array
+     */
+    public function getClusters($search = null) {
+        $search = is_null($search) ? '' : $search;
+        $response = $this->getResource(sprintf('clusters?search=%s', urlencode($search)));
+        $clusters = array();
+        foreach($response->cluster as $cluster) {
+            $clusters[] = new Cluster($this, $cluster);
+        }
+        return $clusters;
+    }
+
+    /**
+     * @param $cluster_id
+     * @return Cluster
+     */
+    public function getCluster($cluster_id) {
+        return new Cluster($this, $this->getResource(sprintf('clusters/%s', urlencode($cluster_id))));
     }
 
     /**
@@ -179,6 +218,10 @@ class OvirtApi
         }
     }
 
+    /**
+     * @param $options
+     * @return string
+     */
     protected function _search_url($options) {
         $current_datacenter = $this->getCurrentDatacenter();
         $search = (is_null($options)) ? sprintf('datacenter=%s', $current_datacenter->name) : $options;

@@ -11,12 +11,12 @@
     try {
         require_once('library/Api.php');
         require_once('library/UtilityFunctions.php');
-        $api        = new OvirtApi('https://10.6.0.200/api/', 'admin@internal', 'W5UNJqFU', true, null, null, false, false);
-        $vms        = $api->getResource('vms');
-        $clusters   = $api->getResource('clusters');
+        $api         = new OvirtApi('https://10.6.0.200/api/', 'admin@internal', 'W5UNJqFU', true, null, null, false, false);
+        $vms         = $api->getResource('vms');
+        $clusters    = $api->getClusters();
         $api_version = $api->getApiVersion();
         $dcs         = $api->getDatacenters();
-        $dc         = $api->getDatacenter('5849b030-626e-47cb-ad90-3ce782d831b3');
+        $dc          = $api->getDatacenter('5849b030-626e-47cb-ad90-3ce782d831b3');
 
     } catch (Exception $e) {
         echo $e->getMessage();
@@ -68,7 +68,7 @@
     }
 
     echo "<h3>List of clusters:</h3>";
-    if(count((array)$clusters)>0) {
+    if(count($clusters)>0) {
         echo "<ul>";
         foreach($clusters as $item) {
             echo "<li>" . $item->name . "</li>";
@@ -79,7 +79,7 @@
     }
 
     echo "<h3>List of datacenters:</h3>";
-    if(count((array)$dcs)>0) {
+    if(count($dcs)>0) {
         echo "<ul>";
         foreach($dcs as $item) {
             $description = (strlen($item->description) > 0) ? ' (' . $item->description . ')' : '';

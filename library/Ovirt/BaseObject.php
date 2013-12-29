@@ -19,11 +19,13 @@
 class BaseObject
 {
 
+    public $client;
     public $id;
     public $href;
     public $name;
 
-    public function __construct($id, $href, $name) {
+    public function __construct(OvirtApi &$client, $id, $href, $name) {
+        $this->client = $client;
         $this->id = $id;
         $this->href = $href;
         $this->name = $name;

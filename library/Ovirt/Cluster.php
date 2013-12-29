@@ -17,29 +17,21 @@
 #
 
 require_once('BaseObject.php');
-class DataCenter extends BaseObject
+class Cluster extends BaseObject
 {
 
     public $description = null;
-    public $status = null;
-    public $storage_type = null;
-    public $storage_format = null;
-    public $supported_versions = array();
+    public $datacenter = null;
     public $version = null;
 
-    public function __construct(OvirtApi $api, SimpleXMLElement $xml) {
+    public function __construct(OvirtApi &$client, SimpleXMLElement $xml) {
+        parent::__construct($client, $xml->attributes()['id']->__toString(), $xml->attributes()['href']->__toString(), $xml->name->__toString());
         $this->_parse_xml_attributes($xml);
-        parent::__construct($api, $xml->attributes()['id']->__toString(), $xml->attributes()['href']->__toString(), $xml->name->__toString());
     }
 
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
         $this->description = (strlen($xml->description->__toString())>0) ? $xml->description->__toString(): null;
-        $this->status = $xml->status->state->__toString();
-        $this->storage_type = $xml->storage_type->__toString();
-        $this->storage_format = (strlen($xml->storage_format->__toString())>0) ? $xml->storage_format->__toString(): null;
-        foreach((array)$xml->supported_versions as $supported_version) {
-            $supported_versions[] = $this->parseVersion($supported_version);
-        }
         $this->version = $this->parseVersion($xml->version);
+        $this->datacenter = $this->client->getDataCenter($xml->data_center->attributes()['id']->__toString());
     }
 }
