@@ -20,6 +20,11 @@ require_once('Exception.php');
 require_once('UtilityFunctions.php');
 require_once('Ovirt/DataCenter.php');
 require_once('Ovirt/Cluster.php');
+require_once('Ovirt/Host.php');
+require_once('Ovirt/StorageDomain.php');
+require_once('Ovirt/Vm.php');
+require_once('Ovirt/Quota.php');
+require_once('Ovirt/IFace.php');
 
 class OvirtApi
 {
@@ -192,6 +197,72 @@ class OvirtApi
      */
     public function getCluster($cluster_id) {
         return new Cluster($this, $this->getResource(sprintf('clusters/%s', urlencode($cluster_id))));
+    }
+
+    /**
+     * @param null $search
+     * @return array
+     */
+    public function getHosts($search = null) {
+        $search = is_null($search) ? '' : $search;
+        $response = $this->getResource(sprintf('hosts?search=%s', urlencode($search)));
+        $hosts = array();
+        foreach($response as $item) {
+            $hosts[] = new Host($this, $item);
+        }
+        return $hosts;
+    }
+
+    /**
+     * @param $host_id
+     * @return Host
+     */
+    public function getHost($host_id) {
+        return new Host($this, $this->getResource(sprintf('hosts/%s', urlencode($host_id))));
+    }
+
+    /**
+     * @param null $search
+     * @return array
+     */
+    public function getStorageDomains($search = null) {
+        $search = is_null($search) ? '' : $search;
+        $response = $this->getResource(sprintf('storagedomains?search=%s', urlencode($search)));
+        $domains = array();
+        foreach($response as $item) {
+            $domains[] = new StorageDomain($this, $item);
+        }
+        return $domains;
+    }
+
+    /**
+     * @param $host_id
+     * @return StorageDomain
+     */
+    public function getStorageDomain($domain_id) {
+        return new StorageDomain($this, $this->getResource(sprintf('storagedomains/%s', urlencode($domain_id))));
+    }
+
+    /**
+     * @param null $search
+     * @return array
+     */
+    public function getVms($search = null) {
+        $search = is_null($search) ? '' : $search;
+        $response = $this->getResource(sprintf('vms?search=%s', urlencode($search)));
+        $vms = array();
+        foreach($response as $item) {
+            $vms[] = new Vm($this, $item);
+        }
+        return $vms;
+    }
+
+    /**
+     * @param $host_id
+     * @return StorageDomain
+     */
+    public function getVm($vm_id) {
+        return new Vm($this, $this->getResource(sprintf('vms/%s', urlencode($vm_id))));
     }
 
     /**

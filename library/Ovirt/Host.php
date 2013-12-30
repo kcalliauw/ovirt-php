@@ -17,13 +17,13 @@
 #
 
 require_once('BaseObject.php');
-require_once('Network.php');
-class Cluster extends BaseObject
+class Host extends BaseObject
 {
 
     public $description = null;
-    public $datacenter = null;
-    public $version = null;
+    public $cluster = null;
+    public $status = null;
+    public $address = null;
 
     public function __construct(OvirtApi &$client, SimpleXMLElement $xml) {
         parent::__construct($client, $xml->attributes()['id']->__toString(), $xml->attributes()['href']->__toString(), $xml->name->__toString());
@@ -32,25 +32,8 @@ class Cluster extends BaseObject
 
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
         $this->description = (strlen($xml->description->__toString())>0) ? $xml->description->__toString(): null;
-        $this->version = $this->parseVersion($xml->version);
-        $this->datacenter = $this->client->getDataCenter($xml->data_center->attributes()['id']->__toString());
-    }
-
-    public function getVersion() {
-        return $this->version;
-    }
-
-    public function getNetworks($id = null) {
-        if(is_null($id)) {
-            $id = $this->id;
-        }
-
-        $networks = array();
-        $response = $this->client->getResource('clusters/' . $id . '/networks');
-        foreach($response as $item) {
-            $networks[] = new Network($this->client, $item);
-        }
-
-        return $networks;
+        $this->datacenter = $this->client->getCluster($xml->cluster->attributes()['id']->__toString());
+        $this->status = $xml->status->state->__toString();
+        $this->address = $xml->address->__toString();
     }
 }

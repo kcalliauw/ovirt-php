@@ -11,9 +11,11 @@
     try {
         require_once('library/Api.php');
         require_once('library/UtilityFunctions.php');
-        $api         = new OvirtApi('https://10.6.0.200/api/', 'admin@internal', 'W5UNJqFU', true, null, null, false, false);
-        $vms         = $api->getResource('vms');
+        $api         = new OvirtApi('https://10.11.0.115/api/', 'admin@internal', 'W5UNJqFU', true, null, null, false, true);
+        $vms         = $api->getVms();
         $clusters    = $api->getClusters();
+        $hosts       = $api->getHosts();
+        $domains     = $api->getStorageDomains();
         $api_version = $api->getApiVersion();
         $dcs         = $api->getDatacenters();
         $dc          = $api->getDatacenter('5849b030-626e-47cb-ad90-3ce782d831b3');
@@ -23,43 +25,19 @@
         die;
     }
 
-
-    if(isset($_POST["vm_action"])) {
-        $api->vm_action($_POST);
-    }
-
     echo "<h1>oVirt User portal</h1>";
     echo "oVirt version: ".$api_version;
 
     echo "<h3>List of virtual machines:</h3>";
     if(count((array)$vms)>0) {
-        echo "<table id='vm-table'><th width='75px'>Status</th><th width='150px'>Name</th><th>Actions</th>";
+        echo "<table id='vm-table'><th width='75px'>Status</th><th width='150px'>Name</th>";
         foreach($vms as $vm) {
-            $vm_id = $vm->attributes()->id;
 
             echo "<tr>";
             # Data
-            echo "<td>" . $vm->status->state . "</td>";
+            echo "<td>" . $vm->status . "</td>";
             echo "<td>" . $vm->name . "</td>";
-            echo "<td>";
-            # Actions
-            # Start
-            echo "<form name='vm-actions' action='' method='post'>";
-            echo "<input id='vm_id' name='vm_id' type='hidden' value='" . $vm_id . "'>";
-            echo "<input id='vm_action' name='vm_action' type='hidden' value='start'>";
-            echo "<input type='submit' value='Start'>";
-            echo "</form>";
-            # Stop
-            echo "<form name='vm-actions' action='' method='post'>";
-            echo "<input id='vm_id' name='vm_id' type='hidden' value='" . $vm_id . "'>";
-            echo "<input id='vm_action' name='vm_action' type='hidden' value='stop'>";
-            echo "<input type='submit' value='Stop'>";
-            echo "</form>";
 
-            // foreach($vm->actions->link as $action) {
-            // 		echo "[ <a href='" . $url . $action->attributes()->href . "'>" . $action->attributes()->rel . "</a> ]&nbsp";
-            // }
-            echo "</td>";
             echo "</tr>";
         }
         echo "</table>";
@@ -67,16 +45,10 @@
         echo "No virtual machines found";
     }
 
-    echo "<h3>List of clusters:</h3>";
-    if(count($clusters)>0) {
-        echo "<ul>";
-        foreach($clusters as $item) {
-            echo "<li>" . $item->name . "</li>";
-        }
-        echo "</ul>";
-    } else {
-        echo "No clusters found";
-    }
+    echo '<h3>Single datacenter info</h3>';
+    echo "Name: $dc->name<br />";
+    echo "Description: $dc->description<br />";
+    echo "Version: $dc->version<br />";
 
     echo "<h3>List of datacenters:</h3>";
     if(count($dcs)>0) {
@@ -92,10 +64,42 @@
         echo "No clusters found";
     }
 
-    echo '<h3>Single datacenter info</h3>';
-    echo "Name: $dc->name<br />";
-    echo "Description: $dc->description<br />";
-    echo "Version: $dc->version<br />";
+    echo "<h3>List of clusters:</h3>";
+    if(count($clusters)>0) {
+        echo "<ul>";
+        foreach($clusters as $item) {
+            echo "<li>" . $item->name . " (ID: " . $item->id . ") (Version: " . $item->getVersion() .")</li>";
+                echo "- Networks: ";
+                foreach($item->getNetworks() as $network) {
+                    echo $network->name . " (" . $network->status . ")";
+                }
+        }
+        echo "</ul>";
+    } else {
+        echo "No clusters found";
+    }
+
+    echo "<h3>List of hosts:</h3>";
+    if(count($hosts)>0) {
+        echo "<ul>";
+        foreach($hosts as $item) {
+            echo "<li>" . $item->name . " (ID: " . $item->id . ") </li>";
+        }
+        echo "</ul>";
+    } else {
+        echo "No clusters found";
+    }
+
+    echo "<h3>List of storage domains:</h3>";
+    if(count($domains)>0) {
+        echo "<ul>";
+        foreach($domains as $item) {
+            echo "<li>" . $item->name . " (ID: " . $item->id . ") </li>";
+        }
+        echo "</ul>";
+    } else {
+        echo "No clusters found";
+    }
 ?>
 </body>
 </html>
