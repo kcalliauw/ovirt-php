@@ -32,7 +32,7 @@ class Host extends BaseObject
 
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
         $this->description = (strlen($xml->description->__toString())>0) ? $xml->description->__toString(): null;
-        $this->datacenter = $this->client->getCluster($xml->cluster->attributes()['id']->__toString());
+        $this->datacenter = $xml->cluster->attributes()['id']->__toString();
         $this->status = $xml->status->state->__toString();
         $this->address = $xml->address->__toString();
     }

@@ -33,7 +33,7 @@ class Cluster extends BaseObject
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
         $this->description = (strlen($xml->description->__toString())>0) ? $xml->description->__toString(): null;
         $this->version = $this->parseVersion($xml->version);
-        $this->datacenter = $this->client->getDataCenter($xml->data_center->attributes()['id']->__toString());
+        $this->datacenter = $xml->data_center->attributes()['id']->__toString();
     }
 
     public function getVersion() {

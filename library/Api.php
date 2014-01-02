@@ -25,6 +25,7 @@ require_once('Ovirt/StorageDomain.php');
 require_once('Ovirt/Vm.php');
 require_once('Ovirt/Quota.php');
 require_once('Ovirt/IFace.php');
+require_once('Ovirt/Template.php');
 
 class OvirtApi
 {
@@ -73,14 +74,14 @@ class OvirtApi
             throw new GeneralException('cURL extension is required to use this project');
         }
 
-        $this->url = $url;
-        $this->username      = $username;
-        $this->password      = $password;
-        $this->datacenter_id = $datacenter_id;
-        $this->cluster_id    = $cluster_id;
-        $this->filtered_api  = $filtered_api;
-        $this->ovirt_ch      = curl_init();
-        $this->http_headers  = array(
+        $this->url              = $url;
+        $this->username         = $username;
+        $this->password         = $password;
+        $this->datacenter_id    = $datacenter_id;
+        $this->cluster_id       = $cluster_id;
+        $this->filtered_api     = $filtered_api;
+        $this->ovirt_ch         = curl_init();
+        $this->http_headers     = array(
             'Content-Type' => 'application/xml',
             'Accept' => 'application/xml'
         );
@@ -130,6 +131,91 @@ class OvirtApi
         $data = new SimpleXMLElement($response);
 		return $data;
 	}
+
+    /**
+     * @param $url
+     * @return mixed
+     * @throws RequestException
+     */
+    protected function _get($url) {
+        curl_setopt($this->ovirt_ch, CURLOPT_URL, $url);
+        $response =  curl_exec($this->ovirt_ch);
+        if($response!==false) {
+            return $response;
+        } else {
+            throw new RequestException(curl_error($this->ovirt_ch), curl_errno($this->ovirt_ch));
+        }
+    }
+
+    /**
+     * @param string $resource
+     * @return SimpleXMLElement
+     * @throws MissingParametersException
+     */
+    public function postResource($resource = null, $data = null) {
+        if(is_null($resource)) {
+            throw new MissingParametersException('A resource is required');
+        }
+
+        $response = $this->_post($this->url . $resource, $data);
+        $xml = new SimpleXMLElement($response);
+        return $xml;
+    }
+
+    /**
+     * @param $url
+     * @return mixed
+     * @throws RequestException
+     */
+    protected function _post($url, $data) {
+        curl_setopt($this->ovirt_ch, CURLOPT_URL, $url);
+        curl_setopt($this->ovirt_ch, CURLOPT_POST, true);
+        curl_setopt($this->ovirt_ch, CURLOPT_POSTFIELDS, $data);
+        $response =  curl_exec($this->ovirt_ch);
+        if($response!==false) {
+            return $response;
+        } else {
+            throw new RequestException(curl_error($this->ovirt_ch), curl_errno($this->ovirt_ch));
+        }
+    }
+
+    /**
+     * @param string $resource
+     * @return SimpleXMLElement
+     * @throws MissingParametersException
+     */
+    public function deleteResource($resource = null, $data = null) {
+        if(is_null($resource)) {
+            throw new MissingParametersException('A resource is required');
+        }
+
+        $response = $this->_delete($this->url . $resource, $data);
+        // TODO: 'Cannot parse string to XML' Must be related to CURLOPT_CUSTOMREQUEST
+        //echo($response);
+        $xml = new SimpleXMLElement($response);
+        return $xml;
+    }
+
+    /**
+     * @param $url
+     * @return mixed
+     * @throws RequestException
+     */
+    protected function _delete($url, $data=null) {
+        curl_setopt($this->ovirt_ch, CURLOPT_URL, $url);
+        curl_setopt($this->ovirt_ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
+        curl_setopt($this->ovirt_ch, CURLOPT_USERPWD, $this->username . ':' . $this->password);
+        if(!is_null($data)) {
+            curl_setopt($this->ovirt_ch, CURLOPT_POSTFIELDS, $data);
+        }
+        curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, array());
+        $response =  curl_exec($this->ovirt_ch);
+        if($response!==false) {
+            return $response;
+        } else {
+            throw new RequestException(curl_error($this->ovirt_ch), curl_errno($this->ovirt_ch));
+        }
+    }
 
     /**
      * @return DataCenter
@@ -236,7 +322,7 @@ class OvirtApi
     }
 
     /**
-     * @param $host_id
+     * @param $domain_id
      * @return StorageDomain
      */
     public function getStorageDomain($domain_id) {
@@ -258,11 +344,33 @@ class OvirtApi
     }
 
     /**
-     * @param $host_id
-     * @return StorageDomain
+     * @param $vm_id
+     * @return Vm
      */
     public function getVm($vm_id) {
         return new Vm($this, $this->getResource(sprintf('vms/%s', urlencode($vm_id))));
+    }
+
+    /**
+     * @param null $search
+     * @return array
+     */
+    public function getTemplates($search = null) {
+        $search = is_null($search) ? '' : $search;
+        $response = $this->getResource(sprintf('templates?search=%s', urlencode($search)));
+        $templates = array();
+        foreach($response as $item) {
+            $templates[] = new Template($this, $item);
+        }
+        return $templates;
+    }
+
+    /**
+     * @param $host_id
+     * @return StorageDomain
+     */
+    public function getTemplate($template_id) {
+        return new Template($this, $this->getResource(sprintf('templates/%s', urlencode($template_id))));
     }
 
     /**
@@ -275,21 +383,6 @@ class OvirtApi
     }
 
     /**
-     * @param $url
-     * @return mixed
-     * @throws RequestException
-     */
-    protected function _get($url) {
-        curl_setopt($this->ovirt_ch, CURLOPT_URL, $url);
-        $response =  curl_exec($this->ovirt_ch);
-        if($response!==false) {
-            return $response;
-        } else {
-            throw new RequestException(curl_error($this->ovirt_ch), curl_errno($this->ovirt_ch));
-        }
-    }
-
-    /**
      * @param $options
      * @return string
      */
@@ -299,59 +392,25 @@ class OvirtApi
         return sprintf('?search=%s', $search);
     }
 
-	public function vm_action($action = null, $id = null){
-		// If not set, retrieve from form
-		if(is_null($action) || is_null($id)) {
-			$action = $_POST['vm_action'];
-			$id = $_POST['vm_id'];
-		}
+    /**
+     * @return string
+     */
+    public function base_url() {
+        return $_SERVER['SERVER_NAME'].$_SERVER['REQUEST_URI'];
+    }
 
-		# Set curl params
-		$ovirt_ch = curl_init();
+    /**
+     * @param $response
+     */
+    protected function parseResponse($response) {
+        return new SimpleXMLElement($response);
+    }
 
-		# action
-		# 	vm
-		# 		os
-		# 			boot dev = cd-rom		/boot
-		# 		/os
-		# 	/vm
-		# /action
-
-		$xml = new SimpleXMLElement('<action/>');
-		$vm = $xml->addChild('vm');
-		$os = $vm->addChild('os');
-		$boot = $os->addChild('boot');
-		$boot->addAttribute('dev', 'hd');
-		$data = $xml->asXML();
-
-		curl_setopt($ovirt_ch, CURLOPT_HTTPHEADER, array('Content-Type: application/xml'));
-		curl_setopt($ovirt_ch, CURLOPT_HEADER, 'application/xml');
-		curl_setopt($ovirt_ch, CURLOPT_POST, true); 
-		curl_setopt($ovirt_ch, CURLOPT_POSTFIELDS, $data); 
-		curl_setopt($ovirt_ch, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt($ovirt_ch, CURLOPT_USERPWD, $this->username . ':' . $this->password);
-		curl_setopt($ovirt_ch, CURLOPT_SSL_VERIFYPEER, false);
-
-		# Determine action
-		switch($action) {
-			case 'start':
-				echo 'Starting';
-				curl_setopt($ovirt_ch, CURLOPT_URL, $this->url . 'vms/' . $id . '/start');
-			case 'stop':
-				echo 'Stopping';
-				curl_setopt($ovirt_ch, CURLOPT_URL, $this->url . 'vms/' . $id . '/stop');
-				break;
-			default:
-				echo 'No action specified';
-		}
-
-		// Perform action
-		$response =  curl_exec($ovirt_ch);
-		echo $response;
-
-		curl_close($ovirt_ch);
-		unset($ovirt_ch);
-	}
+    /* TODO
+     * floppy_hook                              => ?? Used to enable floppy disks
+     * has_datacenter(vm)                       => VM doesn't have DC attributes, why is this method necessary?
+     * put, delete
+     */
 
 	public function create_vm($params) {
 		// Get VM Parameters
@@ -379,8 +438,8 @@ class OvirtApi
 
 		curl_setopt($ovirt_ch, CURLOPT_HTTPHEADER, array('Content-Type: application/xml'));
 		curl_setopt($ovirt_ch, CURLOPT_HEADER, 'application/xml');
-		curl_setopt($ovirt_ch, CURLOPT_POST, true); 
-		curl_setopt($ovirt_ch, CURLOPT_POSTFIELDS, $data); 
+		curl_setopt($ovirt_ch, CURLOPT_POST, true);
+		curl_setopt($ovirt_ch, CURLOPT_POSTFIELDS, $data);
 		curl_setopt($ovirt_ch, CURLOPT_RETURNTRANSFER, true);
 		curl_setopt($ovirt_ch, CURLOPT_USERPWD, $this->username . ':' . $this->password);
 		curl_setopt($ovirt_ch, CURLOPT_SSL_VERIFYPEER, false);

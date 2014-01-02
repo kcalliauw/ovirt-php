@@ -30,11 +30,13 @@ class IFace extends BaseObject{
     }
 
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
-        // TODO;
-        $this->mac = $xml->mac->attributes()['address']->__toString();
-        $this->interface = $xml->interface->__toString(); // ???
-//        $network =
-//        $vm =
+        // Templates do not have these variables
+        if(!empty($xml->mac->attributes['address']) || !empty($xml->vm->attributes()['id'])) {
+            $this->mac = $xml->mac->attributes()['address']->__toString();
+            $this->vm = $xml->vm->attributes()['id']->__toString();
+        }
+        $this->interface = $xml->interface->__toString();
+        $this->network = $xml->network->attributes()['id']->__toString();
     }
 
     // TODO: Parse self to XML

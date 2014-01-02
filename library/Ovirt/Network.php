@@ -33,7 +33,7 @@ class Network extends BaseObject
 
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
         $this->description = (strlen($xml->description->__toString())>0) ? $xml->description->__toString(): null;
-        $this->datacenter = $this->client->getDataCenter($xml->data_center->attributes()['id']->__toString());
+        $this->datacenter = $xml->data_center->attributes()['id']->__toString();
         $this->cluster = $this->client->getCluster($xml->cluster->attributes()['id']->__toString());
         $this->stp = $xml->stp->__toString();
         $this->status = $xml->status->state->__toString();

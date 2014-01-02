@@ -36,17 +36,19 @@ class Volume extends BaseObject{
     }
 
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
+
         $this->size = $xml->size->__toString();
-//        $this->disk_type = $xml->
+        $this->disk_type = (strlen($xml->type->__toString())>0) ? $xml->type->__toString(): null;
         $this->bootable = $xml->bootable->__toString();
-        $this->interface = $xml->interface->__toString(); // ???
+        $this->interface = $xml->interface->__toString();
         $this->format = $xml->format->__toString();
         $this->sparse = $xml->sparse->__toString();
         $this->status = $xml->status->state->__toString();
-        // TOFIX: Max. Level of Function Nesting, too much loop?
-//        $this->storage_domain = $this->client->getStorageDomain($xml->storage_domains->storage_domain->attributes()['id']);
-//        $this->vm = $this->client->getVm($xml->vm->attributes()['id']->__toString());
-//        $this->quota =
+        $this->storage_domain = $xml->storage_domains->storage_domain->attributes()['id'];
+        $this->quota = (strlen($xml->quota->__toString())>0) ? $xml->quota->__toString(): null;
+        if(!empty($xml->vm)) {
+            $this->vm = $xml->vm->attributes()['id'];
+        }
     }
 
     // TODO: Parse self to XML
