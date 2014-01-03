@@ -81,11 +81,9 @@ class OvirtApi
         $this->cluster_id       = $cluster_id;
         $this->filtered_api     = $filtered_api;
         $this->ovirt_ch         = curl_init();
-        $this->http_headers     = array(
-            'Content-Type' => 'application/xml',
-            'Accept' => 'application/xml'
-        );
 
+
+        $this->resetHeaders();
         curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, $this->_getHeaders());
         curl_setopt($this->ovirt_ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($this->ovirt_ch, CURLOPT_USERPWD, $username . ':' . $password);
@@ -117,6 +115,17 @@ class OvirtApi
     }
 
     /**
+     * @return bool
+     */
+    public function resetHeaders() {
+        $this->http_headers     = array(
+            'Content-Type' => 'application/xml',
+            'Accept' => 'application/xml'
+        );
+        return true;
+    }
+
+    /**
      * @param string $resource
      * @return SimpleXMLElement
      * @throws MissingParametersException
@@ -128,8 +137,12 @@ class OvirtApi
         }
 
         $response = $this->_get($this->url . $resource);
-        $data = new SimpleXMLElement($response);
-		return $data;
+        // Newly created VMs do not contain disks / nics, and errors out here.
+        // TODO: Only attempt to pregmatch when trying to access disk or nic rescource
+        if(preg_match('/Error report/i', $response))
+            return null;
+        else
+            return new SimpleXMLElement($response);
 	}
 
     /**
@@ -139,6 +152,7 @@ class OvirtApi
      */
     protected function _get($url) {
         curl_setopt($this->ovirt_ch, CURLOPT_URL, $url);
+        curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, $this->_getHeaders());
         $response =  curl_exec($this->ovirt_ch);
         if($response!==false) {
             return $response;
@@ -156,8 +170,9 @@ class OvirtApi
         if(is_null($resource)) {
             throw new MissingParametersException('A resource is required');
         }
-
+        var_dump($data);
         $response = $this->_post($this->url . $resource, $data);
+        echo($response);
         $xml = new SimpleXMLElement($response);
         return $xml;
     }
@@ -169,6 +184,7 @@ class OvirtApi
      */
     protected function _post($url, $data) {
         curl_setopt($this->ovirt_ch, CURLOPT_URL, $url);
+        curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, $this->_getHeaders());
         curl_setopt($this->ovirt_ch, CURLOPT_POST, true);
         curl_setopt($this->ovirt_ch, CURLOPT_POSTFIELDS, $data);
         $response =  curl_exec($this->ovirt_ch);
@@ -190,8 +206,6 @@ class OvirtApi
         }
 
         $response = $this->_delete($this->url . $resource, $data);
-        // TODO: 'Cannot parse string to XML' Must be related to CURLOPT_CUSTOMREQUEST
-        //echo($response);
         $xml = new SimpleXMLElement($response);
         return $xml;
     }
@@ -203,13 +217,20 @@ class OvirtApi
      */
     protected function _delete($url, $data=null) {
         curl_setopt($this->ovirt_ch, CURLOPT_URL, $url);
+        curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, $this->_getHeaders());
         curl_setopt($this->ovirt_ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
         curl_setopt($this->ovirt_ch, CURLOPT_USERPWD, $this->username . ':' . $this->password);
         if(!is_null($data)) {
             curl_setopt($this->ovirt_ch, CURLOPT_POSTFIELDS, $data);
         }
+        // Save headers
+        $tmp_headers = $this->http_headers;
+        // Headers must be cleared for succesful delete-request
         curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, array());
         $response =  curl_exec($this->ovirt_ch);
+        // Re-initialize original headers for new requests
+        curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, $tmp_headers);
+
         if($response!==false) {
             return $response;
         } else {
@@ -352,6 +373,24 @@ class OvirtApi
     }
 
     /**
+     * @param $data
+     * @return Vm
+     */
+    public function createVm($data) {
+        // Make sure $data is properly formatted and capitalized where needed e.g. the 'default' cluster is not 'Default'..
+         return new Vm($this, $this->postResource('vms/', Vm::toXML($data)));
+    }
+
+    /**
+     * @param $data
+     * @return IFace
+     */
+    public function createInterface($vm_id, $data) {
+        // Make sure $data is properly formatted and capitalized where needed e.g. the 'default' cluster is not 'Default'..
+        return new IFace($this, $this->postResource('vms/' . $vm_id . '/nics', IFace::toXML($data)));
+    }
+
+    /**
      * @param null $search
      * @return array
      */
@@ -409,50 +448,6 @@ class OvirtApi
     /* TODO
      * floppy_hook                              => ?? Used to enable floppy disks
      * has_datacenter(vm)                       => VM doesn't have DC attributes, why is this method necessary?
-     * put, delete
+     * put
      */
-
-	public function create_vm($params) {
-		// Get VM Parameters
-		$name = $params['name'];
-		$cluster = $params['cluster'];
-		$template = $params['template'];
-		// Memory in bytes
-		$memory = $params['memory'];
-		$boot_dev = $params['boot_dev'];
-
-		# Set curl params
-		$ovirt_ch = curl_init();
-
-		$xml = new SimpleXMLElement('<vm/>');
-		$name = $xml->addChild('name', $name);
-		$cluster = $xml->addChild('cluster');
-		$cluster->addChild('name', $cluster);
-		$template = $xml->addChild('template');
-		$template->addChild('name', $template);
-		$memory = $xml->addChild('memory', $memory);
-		$os = $vm->addChild('os');
-		$boot = $os->addChild('boot');
-		$boot->addAttribute('dev', $boot_dev);
-		$data = $xml->asXML();
-
-		curl_setopt($ovirt_ch, CURLOPT_HTTPHEADER, array('Content-Type: application/xml'));
-		curl_setopt($ovirt_ch, CURLOPT_HEADER, 'application/xml');
-		curl_setopt($ovirt_ch, CURLOPT_POST, true);
-		curl_setopt($ovirt_ch, CURLOPT_POSTFIELDS, $data);
-		curl_setopt($ovirt_ch, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt($ovirt_ch, CURLOPT_USERPWD, $this->username . ':' . $this->password);
-		curl_setopt($ovirt_ch, CURLOPT_SSL_VERIFYPEER, false);
-		curl_setopt($ovirt_ch, CURLOPT_URL, $this->url . 'vms/');
-
-		// TODO: Create / attach NICs and disk
-
-		// Perform action
-		$response =  curl_exec($ovirt_ch);
-		echo $response;
-
-		curl_close($ovirt_ch);
-		unset($ovirt_ch);
-	}
-
 }

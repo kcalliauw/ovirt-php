@@ -27,14 +27,52 @@
     }
 
      /* ==================================== Testing Grounds ====================================== */
-     // Delete
-    $api->deleteResource('vms/685597ef-cfd1-43a8-b58d-65b4f77500f7');
+    // VM Creation
+    $vm_test = array(
+        'name'      => 'VM-' . time() . '-test',
+        'cluster'   => array(
+            'name'  => 'Default',
+        ),
+        'template'  => array(
+            'name'  => 'Blank',
+        ),
+        'memory'    => '536870912',
+        'os'        => array(
+            'type'  => 'linux',
+            'boot'  => array(
+                'dev'   =>  'hd',
+            )
+        ),
+        'profile'   => 'server',
+        'display'   => array (
+            'type'      => 'spice',
+            'address'   => '10.11.0.116',
+            'port'      => '5900',
+            'secure_port'   => '',
+            'subject'   => '',
+            'monitors'  => '1',
+        ),
+        'cpu'       => array(
+            'cores' => '2',
+            'sockets'   => '2',
+        ),
+    );
 
-     // VM XML Parsing
-//   $vm01 = $api->getVm('a27d2ff7-33e4-4bcb-a748-99e9204d9b61');
-//   var_dump($vm01);
-//   var_dump('=====================');
-//   var_dump($vm01->toXML());
+    $nic_test = array(
+        'name'      => 'nic1',
+        'interface' => 'virtio',
+        'network'   => array(
+            'name'  => 'ovirtmgmt',
+        ),
+    );
+
+    # Delete VM
+//    $api->deleteResource('vms/vm_id');
+//     TODO :: doesnt create VM straight after a delete request (crashes in postResource), headers probably not set properly after deleteRescource
+
+    # Create VM
+//    $newvm = $api->createVm($vm_test);
+//    var_dump($newvm);
 
     /* ============================================================================================= */
     echo "<h1>oVirt User portal</h1>";
@@ -71,7 +109,6 @@
             echo '<li>' . $item->name . $description . $id . '</li>';
         }
         echo "</ul>";
-        //d($dcs);
     } else {
         echo "No Datacenters found";
     }
@@ -81,10 +118,11 @@
         echo "<ul>";
         foreach($clusters as $item) {
             echo "<li>" . $item->name . " (ID: " . $item->id . ") (Version: " . $item->getVersion() .")</li>";
-//            echo "- Networks: ";
-//            foreach($item->getNetworks() as $network) {
-//                echo $network->name . " (" . $network->status . ")";
-//            }
+            echo "- Cluster Networks: <ul>";
+            foreach($item->getNetworks() as $network) {
+                echo '<li>' . $network->name . " (" . $network->status . ")</li>";
+            }
+            echo "</ul>";
         }
         echo "</ul>";
     } else {
@@ -118,14 +156,6 @@
         echo "<ul>";
         foreach($templates as $item) {
             echo "<li>" . $item->name . " (ID: " . $item->id . ") </li>";
-//            echo "- Interfaces: ";
-//            foreach($item->getInterfaces() as $interface) {
-//                echo $interface->name;
-//            }
-//            echo "- Volumes: ";
-//            foreach($item->getVolumes() as $volume) {
-//                echo $volume->name;
-//            }
         }
         echo "</ul>";
     } else {

@@ -35,6 +35,48 @@ class Volume extends BaseObject{
         $this->_parse_xml_attributes($xml);
     }
 
+    public static function toXML($data) {
+        // Initialize Volume XML Element
+        $xml = new SimpleXMLElement('<disk/>');
+        # Name
+        if(array_key_exists('name', $data))
+            $xml->addChild('name', $data['name']);
+        # VM
+        // Set automatically when linked to VM upon creation
+        # Alias ( = name ??)
+        if(array_key_exists('name', $data))
+            $xml->addChild('alias', $data['name']);
+        # Storage Domain
+        if(array_key_exists('storage_domain', $data)) {
+            $domain = $xml->addChild('storage_domain');
+            $inner_domain = $domain->addChild('storage_domain');
+            $inner_domain->addAttribute('id', $data['storage_domain']);
+        }
+
+        # Size
+        if(array_key_exists('size', $data))
+            $xml->addChild('size', $data['size']);
+
+        # Type
+        if(array_key_exists('type', $data))
+            $xml->addChild('type', $data['type']);
+
+        # Interface
+        if(array_key_exists('interface', $data))
+            $xml->addChild('interface', $data['interface']);
+
+        # Format
+        if(array_key_exists('format', $data))
+            $xml->addChild('format', $data['format']);
+
+        # Bootable
+        if(array_key_exists('bootable', $data))
+            $xml->addChild('bootable', $data['bootable']);
+
+
+        return $xml->asXML();
+    }
+
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
 
         $this->size = $xml->size->__toString();

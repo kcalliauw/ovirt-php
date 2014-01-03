@@ -43,6 +43,70 @@ class Vm extends BaseObject{
         $this->_parse_xml_attributes($xml);
     }
 
+    public static function toXML($data) {
+        // Initialize VM XML Element
+        $xml = new SimpleXMLElement('<vm/>');
+        // Parse array to elements
+        # Name
+        if(array_key_exists('name', $data)) {
+            $xml->addChild('name', $data['name']);
+        } # Cluster
+        if(array_key_exists('cluster', $data)) {
+            $cluster = $xml->addChild('cluster');
+            $cluster->addChild('name', $data['cluster']['name']);
+        } # Template
+        if(array_key_exists('template', $data)) {
+        $template = $xml->addChild('template');
+        $template->addChild('name', $data['template']['name']);
+        } # Memory
+        if(array_key_exists('memory', $data)) {
+            $xml->addChild('memory', $data['memory']);
+        } # OS
+        if(array_key_exists('os', $data)) {
+            $os = $xml->addChild('os');
+            if(array_key_exists('type', $data['os']))
+                $os->addAttribute('type', $data['os']['type']);
+            // Multiple boot devices, determine which is first
+            if(array_key_exists('boot', $data['os'])) {
+                $boot1 = $os->addChild('boot');
+                $boot2 = $os->addChild('boot');
+                if($data['os']['boot']['dev'] == 'hd') {
+                    $boot1->addAttribute('dev', 'hd');
+                    $boot2->addAttribute('dev', 'cdrom');
+                } else {
+                    $boot1->addAttribute('dev', 'cdrom');
+                    $boot2->addAttribute('dev', 'hd');
+                }
+            }
+        } # Profile
+        if(array_key_exists('profile', $data)) {
+            // 'server' or 'desktop'
+            $xml->addChild('type', $data['profile']);
+        } # Display
+        if(array_key_exists('display', $data)) {
+            $display = $xml->addChild('display');
+            $display->addChild('type', $data['display']['type']);
+            // TODO: Find out how to set below properties, if at all
+            $display->addChild('address', $data['display']['address']);
+            $display->addChild('port', $data['display']['port']);
+            $display->addChild('secure_port', $data['display']['secure_port']);
+            $display->addChild('subject', $data['display']['subject']);
+            $display->addChild('monitors', $data['display']['monitors']);
+        } # CPU (Cores & Sockets)
+        if(array_key_exists('cpu', $data)) {
+            $cpu = $xml->addChild('cpu');
+            $topology = $cpu->addChild('topology');
+            if(array_key_exists('cores', $data['cpu']))
+                $topology->addAttribute('cores', $data['cpu']['cores']);
+            if(array_key_exists('sockets', $data['cpu']))
+                $topology->addAttribute('sockets', $data['cpu']['sockets']);
+        } # Quota
+        if(array_key_exists('quota', $data)) {
+            $xml->addChild('quota', $data['quota']);
+        }
+        return $xml->asXML();
+    }
+
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
         $this->description = (strlen($xml->description->__toString())>0) ? $xml->description->__toString(): null;
         $this->status = $xml->status->state->__toString();
@@ -56,13 +120,15 @@ class Vm extends BaseObject{
         $this->quota = $xml->quota->__toString();
         $this->interfaces = $this->getInterfaces();
         $this->volumes = $this->getVolumes();
-        # Storage
-        $disk_size = 0;
-        foreach($this->volumes as $volume) {
-            $disk_size += $volume->size;
+        // Newly created VMs dont have disks, ergo no disk size can be calculated
+        if(!is_null($this->volumes)) {
+            # Storage
+            $disk_size = 0;
+            foreach($this->volumes as $volume) {
+                $disk_size += $volume->size;
+            }
+            $this->storage = $disk_size;
         }
-        $this->storage = $disk_size;
-
         # OS
         $boot = array();
         foreach($xml->os->boot as $dev) {
@@ -88,45 +154,18 @@ class Vm extends BaseObject{
         );
     }
 
-    public function toXML() {
-        // Minimum XML needed to create a VM
-        //        <vm>
-        //  <name>vm1</name>
-        //  <cluster>
-        //    <name>default</name>
-        //  </cluster>
-        //  <template>
-        //    <name>Blank</name>
-        //  </template>
-        //  <memory>536870912</memory>
-        //  <os>
-        //    <boot dev="hd"/>
-        //  </os>
-        //</vm>
-
-        $xml = new SimpleXMLElement('<vm/>');
-        $name = $xml->addChild('name', $this->name);
-        $cluster = $xml->addChild('cluster');
-        $cluster->addChild('name', $this->cluster);
-        $template = $xml->addChild('template');
-        $template->addChild('name', $this->template);
-        $memory = $xml->addChild('memory', $this->memory);
-        $os = $xml->addChild('os');
-        $boot = $os->addChild('boot');
-        $boot->addAttribute('dev', 'hd');
-        $data = $xml->asXML();
-
-        return $data;
-    }
-
     private function getInterfaces() {
-        # Interfaces
         $interfaces = array();
         $nics = $this->client->getResource('vms/' . $this->id . '/nics');
-        foreach($nics as $nic) {
-            $interfaces[] = new IFace($this->client, $nic);
+        // Newly created VMs have no nics yet
+        if(is_null($nics)) {
+            return null;
+        } else {
+            foreach($nics as $nic) {
+                $interfaces[] = new IFace($this->client, $nic);
+            }
+            return $interfaces;
         }
-        return $interfaces;
     }
 
     public function getQuota() {
@@ -136,10 +175,15 @@ class Vm extends BaseObject{
     private function getVolumes() {
         $volumes = array();
         $disks = $this->client->getResource('vms/' . $this->id . '/disks');
-        foreach($disks as $disk) {
-            $volumes[] = new Volume($this->client, $disk);
+        // Newly created disks have no disks yet
+        if(is_null($disks)) {
+            return null;
+        } else {
+            foreach($disks as $disk) {
+                $volumes[] = new Volume($this->client, $disk);
+            }
+            return $volumes;
         }
-        return $volumes;
     }
 
     public function isRunning() {

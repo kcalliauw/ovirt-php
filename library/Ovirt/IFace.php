@@ -29,6 +29,37 @@ class IFace extends BaseObject{
         $this->_parse_xml_attributes($xml);
     }
 
+    public static function toXML($data) {
+        // Initialize IFace XML Element
+        $xml = new SimpleXMLElement('<nic/>');
+        # Name
+        if(array_key_exists('name', $data))
+            $xml->addChild('name', $data['name']);
+        # VM
+        // Is set automatically after the interface is added to the VM
+        # Network
+        if(array_key_exists('network', $data)) {
+            $network = $xml->addChild('network');
+            $network->addChild('name', $data['network']['name']);
+        }
+        # Link State (UP / DOWN) Default: UP
+        if(array_key_exists('linked', $data))
+            $xml->addChild('linked', $data['linked']);
+        # Interface
+        if(array_key_exists('interface', $data))
+            $xml->addChild('interface', $data['interface']);
+        # Mac
+        if(array_key_exists('mac', $data))
+            $xml->addChild('mac', $data['mac']);
+        # Active
+        // Is set automatically depending on 'plugged'
+        # Plugged
+        if(array_key_exists('plugged', $data))
+            $xml->addChild('plugged', $data['plugged']);
+
+        return $xml->asXML();
+    }
+
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
         // Templates do not have these variables
         if(!empty($xml->mac->attributes['address']) || !empty($xml->vm->attributes()['id'])) {
@@ -38,6 +69,4 @@ class IFace extends BaseObject{
         $this->interface = $xml->interface->__toString();
         $this->network = $xml->network->attributes()['id']->__toString();
     }
-
-    // TODO: Parse self to XML
 }
