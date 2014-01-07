@@ -26,6 +26,10 @@ class Quota extends BaseObject{
         $this->_parse_xml_attributes($xml);
     }
 
+    /**
+     * @param SimpleXMLElement
+     * @return $array
+     */
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
         $this->description = (strlen($xml->description->__toString())>0) ? $xml->description->__toString(): null;
     }

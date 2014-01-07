@@ -34,6 +34,7 @@ class OvirtApi
 	private $username;
 	private $password;
     private $ovirt_ch;
+    private $http_headers;
 
 	private $datacenter_id;
 	private $cluster_id;
@@ -131,10 +132,8 @@ class OvirtApi
      * @throws MissingParametersException
      */
     public function getResource($resource = null) {
-
-        if(is_null($resource)) {
+        if(is_null($resource))
             throw new MissingParametersException('A resource is required');
-        }
 
         $response = $this->_get($this->url . $resource);
         // Newly created VMs do not contain disks / nics, and errors out here.
@@ -170,9 +169,7 @@ class OvirtApi
         if(is_null($resource)) {
             throw new MissingParametersException('A resource is required');
         }
-        var_dump($data);
         $response = $this->_post($this->url . $resource, $data);
-        echo($response);
         $xml = new SimpleXMLElement($response);
         return $xml;
     }
@@ -186,6 +183,39 @@ class OvirtApi
         curl_setopt($this->ovirt_ch, CURLOPT_URL, $url);
         curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, $this->_getHeaders());
         curl_setopt($this->ovirt_ch, CURLOPT_POST, true);
+        curl_setopt($this->ovirt_ch, CURLOPT_POSTFIELDS, $data);
+        $response =  curl_exec($this->ovirt_ch);
+        if($response!==false) {
+            return $response;
+        } else {
+            throw new RequestException(curl_error($this->ovirt_ch), curl_errno($this->ovirt_ch));
+        }
+    }
+
+    /**
+     * @param string $resource
+     * @return SimpleXMLElement
+     * @throws MissingParametersException
+     */
+    public function putResource($resource = null, $data = null) {
+        if(is_null($resource)) {
+            throw new MissingParametersException('A resource is required');
+        }
+        $response = $this->_put($this->url . $resource, $data);
+        echo($response);
+        $xml = new SimpleXMLElement($response);
+        return $xml;
+    }
+
+    /**
+     * @param $url
+     * @return mixed
+     * @throws RequestException
+     */
+    protected function _put($url, $data) {
+        curl_setopt($this->ovirt_ch, CURLOPT_URL, $url);
+        curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, $this->_getHeaders());
+        curl_setopt($this->ovirt_ch, CURLOPT_CUSTOMREQUEST, 'PUT');
         curl_setopt($this->ovirt_ch, CURLOPT_POSTFIELDS, $data);
         $response =  curl_exec($this->ovirt_ch);
         if($response!==false) {
@@ -381,6 +411,34 @@ class OvirtApi
          return new Vm($this, $this->postResource('vms/', Vm::toXML($data)));
     }
 
+
+    /**
+     * @param $id
+     * @return IFace
+     */
+    public function deleteVm($id) {
+        $this->deleteResource('vms/' . $id);
+    }
+
+    /**
+     * @param $data
+     * @return Vm
+     */
+    public function updateVm($data) {
+        // Make sure $data is properly formatted and capitalized where needed e.g. the 'default' cluster is not 'Default'..
+        return new Vm($this, $this->putResource('vms/', Vm::toXML($data)));
+    }
+
+    /**
+     * @param $data
+     * @return Vm
+     */
+    public function setTicket($vm_id, $expiry) {
+        // Make sure $data is properly formatted and capitalized where needed e.g. the 'default' cluster is not 'Default'..
+        return new Vm($this, $this->postResource('vms/' . $vm_id . '/ticket', Vm::getTicket($expiry)));
+    }
+
+
     /**
      * @param $data
      * @return IFace
@@ -388,6 +446,54 @@ class OvirtApi
     public function createInterface($vm_id, $data) {
         // Make sure $data is properly formatted and capitalized where needed e.g. the 'default' cluster is not 'Default'..
         return new IFace($this, $this->postResource('vms/' . $vm_id . '/nics', IFace::toXML($data)));
+    }
+
+    /**
+     * @param $id
+     */
+    public function deleteInterface($vm_id, $id) {
+       $this->deleteResource('vms/' . $vm_id . '/nics/' . $id);
+    }
+
+    /**
+     * @param $data
+     * @return IFace
+     */
+    public function updateInterface($vm_id, $id, $data) {
+        // Make sure $data is properly formatted and capitalized where needed e.g. the 'default' cluster is not 'Default'..
+        return new IFace($this, $this->putResource('vms/' . $vm_id . '/nics/' . $id, IFace::toXML($data)));
+    }
+
+    /**
+     * @param $data
+     */
+    public function createVolume($vm_id, $data) {
+        // Make sure $data is properly formatted and capitalized where needed e.g. the 'default' cluster is not 'Default'..
+        return new Volume($this, $this->postResource('vms/' . $vm_id . '/disks', Volume::toXML($data)));
+    }
+
+    /**
+     * @param $id
+     * @return IFace
+     */
+    public function deleteVolume($vm_id, $id) {
+        $this->deleteResource('vms/' . $vm_id . '/disks/' . $id);
+    }
+
+    /**
+     * @param $data
+     */
+    public function createTemplate($data) {
+        // Make sure $data is properly formatted and capitalized where needed e.g. the 'default' cluster is not 'Default'..
+        return new Template($this, $this->postResource('templates/', Template::toXML($data)));
+    }
+
+    /**
+     * @param $id
+     * @return IFace
+     */
+    public function deleteTemplate($id) {
+        $this->deleteResource('templates/'. $id);
     }
 
     /**
@@ -422,6 +528,17 @@ class OvirtApi
     }
 
     /**
+     * @return boolean
+     */
+    public function floppyHook() {
+        $response = $this->getResource('capabilities');
+        if(!$response->xpath('version/custom_properties/custom_property[@name="floppyinject"]'))
+            return false;
+
+        return true;
+    }
+
+    /**
      * @param $options
      * @return string
      */
@@ -444,10 +561,4 @@ class OvirtApi
     protected function parseResponse($response) {
         return new SimpleXMLElement($response);
     }
-
-    /* TODO
-     * floppy_hook                              => ?? Used to enable floppy disks
-     * has_datacenter(vm)                       => VM doesn't have DC attributes, why is this method necessary?
-     * put
-     */
 }

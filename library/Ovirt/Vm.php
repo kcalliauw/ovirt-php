@@ -43,6 +43,18 @@ class Vm extends BaseObject{
         $this->_parse_xml_attributes($xml);
     }
 
+    public static function getTicket($expiry) {
+        $xml = new SimpleXMLElement('<action/>');
+        $ticket = $xml->addChild('ticket');
+        $ticket->addChild('expiry', $expiry);
+
+        return $xml->asXML();
+    }
+
+    /**
+     * @param $array
+     * @return SimpleXMLElement
+     */
     public static function toXML($data) {
         // Initialize VM XML Element
         $xml = new SimpleXMLElement('<vm/>');
@@ -107,6 +119,10 @@ class Vm extends BaseObject{
         return $xml->asXML();
     }
 
+    /**
+     * @param SimpleXMLElement
+     * @return $array
+     */
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
         $this->description = (strlen($xml->description->__toString())>0) ? $xml->description->__toString(): null;
         $this->status = $xml->status->state->__toString();

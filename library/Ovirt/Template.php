@@ -36,6 +36,31 @@ class Template extends BaseObject{
         $this->_parse_xml_attributes($xml);
     }
 
+    /**
+     * @param $array
+     * @return SimpleXMLElement
+     */
+    public static function toXML($data) {
+        // Initialize VM XML Element
+        $xml = new SimpleXMLElement('<template/>');
+        // Parse array to elements
+        # Name
+        if(array_key_exists('name', $data)) {
+            $xml->addChild('name', $data['name']);
+        } # VM
+        if(array_key_exists('vm_id', $data)) {
+            $vm = $xml->addChild('vm');
+//            $vm->addChild('id', $data['vm_id']);
+            $vm->addAttribute('id', $data['vm_id']);
+        }
+        var_dump($xml);
+        return $xml->asXML();
+    }
+
+    /**
+     * @param SimpleXMLElement
+     * @return $array
+     */
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
         $this->description = (strlen($xml->description->__toString())>0) ? $xml->description->__toString(): null;
         $this->status = $xml->status->state->__toString();
@@ -66,6 +91,10 @@ class Template extends BaseObject{
         );
     }
 
+    /**
+     * @param $id
+     * @return IFace[]
+     */
     public function getInterfaces($id = null) {
         if(is_null($id)) {
             $id = $this->id;
@@ -78,6 +107,10 @@ class Template extends BaseObject{
         return $interfaces;
     }
 
+    /**
+     * @param $id
+     * @return Volume[]
+     */
     public function getVolumes($id = null) {
         if(is_null($id)) {
             $id = $this->id;

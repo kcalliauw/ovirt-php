@@ -29,6 +29,10 @@ class IFace extends BaseObject{
         $this->_parse_xml_attributes($xml);
     }
 
+    /**
+     * @param $array
+     * @return SimpleXMLElement
+     */
     public static function toXML($data) {
         // Initialize IFace XML Element
         $xml = new SimpleXMLElement('<nic/>');
@@ -60,6 +64,10 @@ class IFace extends BaseObject{
         return $xml->asXML();
     }
 
+    /**
+     * @param SimpleXMLElement
+     * @return $array
+     */
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
         // Templates do not have these variables
         if(!empty($xml->mac->attributes['address']) || !empty($xml->vm->attributes()['id'])) {

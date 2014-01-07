@@ -27,7 +27,7 @@
     }
 
      /* ==================================== Testing Grounds ====================================== */
-    // VM Creation
+    // Creation
     $vm_test = array(
         'name'      => 'VM-' . time() . '-test',
         'cluster'   => array(
@@ -58,21 +58,45 @@
         ),
     );
 
+    $nic_update = array(
+        'plugged'      => 'false',
+    );
     $nic_test = array(
-        'name'      => 'nic1',
-        'interface' => 'virtio',
-        'network'   => array(
-            'name'  => 'ovirtmgmt',
-        ),
+    'name'      => 'nic3',
+    'interface' => 'virtio',
+    'network'   => array(
+        'name'  => 'ovirtmgmt',
+    ),
+);
+
+
+    $disk_test = array(
+        'name'              => 'new-disk',
+        'storage_domain'    => '23b600ed-0d96-415e-b356-08c336f4415e',
+        'interface'         => 'virtio',
+        'size'              => '10737418240',
+        'type'              => 'system',
+        'format'            => 'cow',
+        'bootable'          => 'false',
+        'shareable'         => 'false',
+        'sparse'            => 'true',
     );
 
-    # Delete VM
-//    $api->deleteResource('vms/vm_id');
-//     TODO :: doesnt create VM straight after a delete request (crashes in postResource), headers probably not set properly after deleteRescource
+    $template_test = array(
+        'name'      => 'template-' . time() . '-test',
+        'vm_id'     => 'a27d2ff7-33e4-4bcb-a748-99e9204d9b61',
+//        'vm_id'     => 'kj-vm-01',
+    );
 
-    # Create VM
-//    $newvm = $api->createVm($vm_test);
-//    var_dump($newvm);
+
+
+
+    // Delete VM
+//    $api->deleteVm('0cc5c092-3735-4725-b7c5-cd4adf30b14f');
+
+    // Create VM
+//    $api->createVm($vm_test);
+
 
     /* ============================================================================================= */
     echo "<h1>oVirt User portal</h1>";
@@ -118,11 +142,6 @@
         echo "<ul>";
         foreach($clusters as $item) {
             echo "<li>" . $item->name . " (ID: " . $item->id . ") (Version: " . $item->getVersion() .")</li>";
-            echo "- Cluster Networks: <ul>";
-            foreach($item->getNetworks() as $network) {
-                echo '<li>' . $network->name . " (" . $network->status . ")</li>";
-            }
-            echo "</ul>";
         }
         echo "</ul>";
     } else {

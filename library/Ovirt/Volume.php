@@ -35,6 +35,10 @@ class Volume extends BaseObject{
         $this->_parse_xml_attributes($xml);
     }
 
+    /**
+     * @param $array
+     * @return SimpleXMLElement
+     */
     public static function toXML($data) {
         // Initialize Volume XML Element
         $xml = new SimpleXMLElement('<disk/>');
@@ -73,10 +77,13 @@ class Volume extends BaseObject{
         if(array_key_exists('bootable', $data))
             $xml->addChild('bootable', $data['bootable']);
 
-
         return $xml->asXML();
     }
 
+    /**
+     * @param SimpleXMLElement
+     * @return $array
+     */
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
 
         $this->size = $xml->size->__toString();
