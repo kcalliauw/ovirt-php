@@ -11,7 +11,7 @@
     try {
         require_once('library/Api.php');
         require_once('library/UtilityFunctions.php');
-        $api         = new OvirtApi('https://10.11.0.115/api/', 'admin@internal', 'W5UNJqFU', true, null, null, false, true);
+        $api         = new OvirtApi(true, null, null, false, true);
         $vms         = $api->getVms();
         $clusters    = $api->getClusters();
         $hosts       = $api->getHosts();
@@ -27,7 +27,7 @@
     }
 
      /* ==================================== Testing Grounds ====================================== */
-    // Creation
+    // Params
     $vm_test = array(
         'name'      => 'VM-' . time() . '-test',
         'cluster'   => array(
@@ -58,45 +58,8 @@
         ),
     );
 
-    $nic_update = array(
-        'plugged'      => 'false',
-    );
-    $nic_test = array(
-    'name'      => 'nic3',
-    'interface' => 'virtio',
-    'network'   => array(
-        'name'  => 'ovirtmgmt',
-    ),
-);
-
-
-    $disk_test = array(
-        'name'              => 'new-disk',
-        'storage_domain'    => '23b600ed-0d96-415e-b356-08c336f4415e',
-        'interface'         => 'virtio',
-        'size'              => '10737418240',
-        'type'              => 'system',
-        'format'            => 'cow',
-        'bootable'          => 'false',
-        'shareable'         => 'false',
-        'sparse'            => 'true',
-    );
-
-    $template_test = array(
-        'name'      => 'template-' . time() . '-test',
-        'vm_id'     => 'a27d2ff7-33e4-4bcb-a748-99e9204d9b61',
-//        'vm_id'     => 'kj-vm-01',
-    );
-
-
-
-
-    // Delete VM
-//    $api->deleteVm('0cc5c092-3735-4725-b7c5-cd4adf30b14f');
-
-    // Create VM
-//    $api->createVm($vm_test);
-
+//    $api->deleteVm('');
+    $api->createVm($vm_test);
 
     /* ============================================================================================= */
     echo "<h1>oVirt User portal</h1>";

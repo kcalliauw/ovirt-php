@@ -168,6 +168,10 @@ class Vm extends BaseObject{
             'address'   => $xml->display->address->__toString(),
             'port'      => $xml->display->port->__toString(),
         );
+
+        echo $this->id;
+        echo '==test==';
+
     }
 
     private function getInterfaces() {

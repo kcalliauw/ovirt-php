@@ -39,11 +39,9 @@ class OvirtApi
 	private $datacenter_id;
 	private $cluster_id;
     private $filtered_api;
+    private $insecure;
 
     /**
-     * @param string $url server url (format "http(s)://server[:port]/api")
-     * @param string $username user (format user@domain)
-     * @param string $password password
      * @param bool $insecure signals to not demand site trustworthiness for ssl enabled connection (default is false)
      * @param int $datacenter_id the selected datacenter id
      * @param int $cluster_id the selected cluster id
@@ -60,7 +58,7 @@ class OvirtApi
      * @throws FormatException: raised when server replies in non-XML format.
      * @throws GeneralException: raised when no more specific exception is applicable.
      */
-    public function __construct ($url, $username, $password, $insecure = false, $datacenter_id = null, $cluster_id = null, $filtered_api = false, $debug = false) {
+    public function __construct ($insecure = false, $datacenter_id = null, $cluster_id = null, $filtered_api = false, $debug = false) {
 
         if($debug) {
             if(extension_loaded('xdebug')) {
@@ -75,27 +73,41 @@ class OvirtApi
             throw new GeneralException('cURL extension is required to use this project');
         }
 
-        $this->url              = $url;
-        $this->username         = $username;
-        $this->password         = $password;
+        // Initialize API using Config file
+        $config = parse_ini_file("config/config.ini");
+        $this->url              = $config['url'];
+        $this->username         = $config['username'];
+        $this->password         = $config['password'];
+
+        $this->filtered_api     = ($config['filtered']) ? true : false;
+        $this->insecure         = ($config['insecure']) ? true : false;
+
         $this->datacenter_id    = $datacenter_id;
         $this->cluster_id       = $cluster_id;
-        $this->filtered_api     = $filtered_api;
-        $this->ovirt_ch         = curl_init();
 
+        // Initialize connection
+        $this->initCurl();
+
+    }
+    /**
+     * (re-)Initializes the connection with necessary options
+     * @return void
+     */
+    public function initCurl() {
+        $this->ovirt_ch= curl_init();
 
         $this->resetHeaders();
         curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, $this->_getHeaders());
         curl_setopt($this->ovirt_ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($this->ovirt_ch, CURLOPT_USERPWD, $username . ':' . $password);
+        curl_setopt($this->ovirt_ch, CURLOPT_USERPWD, $this->username . ':' . $this->password);
 
-        if($insecure) {
+        if($this->insecure) {
             curl_setopt($this->ovirt_ch, CURLOPT_SSL_VERIFYPEER, false);
         }
-
     }
 
     /**
+     * Returns the HTTP headers of the current connection
      * @return array
      */
     protected function _getHeaders() {
@@ -107,7 +119,9 @@ class OvirtApi
     }
 
     /**
+     * Adds new headers to the existing HTTP_HEADERS of the current connection
      * @param array $headers Associative array of header values to add or set new values for
+     * @return void
      */
     public function addHeaders(array $headers) {
         foreach($headers as $k => $v) {
@@ -116,6 +130,8 @@ class OvirtApi
     }
 
     /**
+     * Resets the headers to their original, desired state as if the connection was just initialized
+     * This function is used to prevent custom requests from hogging the channel
      * @return bool
      */
     public function resetHeaders() {
@@ -127,6 +143,21 @@ class OvirtApi
     }
 
     /**
+     * Determines whether or not the previous request was a PUT / DELETE request
+     * The function assists in resetting the connection after such a custom request
+     * @return bool
+     */
+    private function isCustomRequest() {
+        $info = curl_getinfo($this->ovirt_ch);
+        // If URL contains an ID of any kind, a custom request was made
+        $isCustom = preg_match('/[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}/', $info['url']);
+
+        return $isCustom;
+    }
+
+
+    /**
+     * Perform a HTTP GET request to obtain the specified resource
      * @param string $resource
      * @return SimpleXMLElement
      * @throws MissingParametersException
@@ -136,10 +167,16 @@ class OvirtApi
             throw new MissingParametersException('A resource is required');
 
         $response = $this->_get($this->url . $resource);
-        // Newly created VMs do not contain disks / nics, and errors out here.
+        /**
+         * Newly created VMs contain no disk / nic yet, upon creatin a VM it will attempt to call upon its disks / nics which are non-existant
+         * The error is "caught" here and bypassed by returning a null value
+         *
+         * TEMPORARY FIX
+         */
         // TODO: Only attempt to pregmatch when trying to access disk or nic rescource
-        if(preg_match('/Error report/i', $response))
+        if(preg_match('/Error report/i', $response)) {
             return null;
+        }
         else
             return new SimpleXMLElement($response);
 	}
@@ -150,6 +187,10 @@ class OvirtApi
      * @throws RequestException
      */
     protected function _get($url) {
+        // Re-initialize CURL after PUT / DELETE request
+        if($this->isCustomRequest($url))
+            $this->initCurl($this->insecure);
+
         curl_setopt($this->ovirt_ch, CURLOPT_URL, $url);
         curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, $this->_getHeaders());
         $response =  curl_exec($this->ovirt_ch);
@@ -161,16 +202,19 @@ class OvirtApi
     }
 
     /**
+     * Perform a HTTP POST request to create / add the specified resource
      * @param string $resource
      * @return SimpleXMLElement
      * @throws MissingParametersException
      */
     public function postResource($resource = null, $data = null) {
+        echo '=== POSTING ===';
         if(is_null($resource)) {
             throw new MissingParametersException('A resource is required');
         }
         $response = $this->_post($this->url . $resource, $data);
         $xml = new SimpleXMLElement($response);
+        echo '=== DONE POSTING ===';
         return $xml;
     }
 
@@ -180,11 +224,17 @@ class OvirtApi
      * @throws RequestException
      */
     protected function _post($url, $data) {
+        // Re-initialize CURL after PUT / DELETE request
+        if($this->isCustomRequest($url))
+            $this->initCurl($this->insecure);
+
         curl_setopt($this->ovirt_ch, CURLOPT_URL, $url);
         curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, $this->_getHeaders());
         curl_setopt($this->ovirt_ch, CURLOPT_POST, true);
         curl_setopt($this->ovirt_ch, CURLOPT_POSTFIELDS, $data);
+
         $response =  curl_exec($this->ovirt_ch);
+
         if($response!==false) {
             return $response;
         } else {
@@ -193,6 +243,7 @@ class OvirtApi
     }
 
     /**
+     * Perform a HTTP PUT request to update the specified resource
      * @param string $resource
      * @return SimpleXMLElement
      * @throws MissingParametersException
@@ -202,7 +253,6 @@ class OvirtApi
             throw new MissingParametersException('A resource is required');
         }
         $response = $this->_put($this->url . $resource, $data);
-        echo($response);
         $xml = new SimpleXMLElement($response);
         return $xml;
     }
@@ -226,6 +276,7 @@ class OvirtApi
     }
 
     /**
+     * Perform a HTTP DELETE request to delete the specified resource
      * @param string $resource
      * @return SimpleXMLElement
      * @throws MissingParametersException
@@ -255,9 +306,9 @@ class OvirtApi
         }
         // Save headers
         $tmp_headers = $this->http_headers;
-        // Headers must be cleared for succesful delete-request
+        // Headers must be cleared for succesful delete-operation with Ovirt API
         curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, array());
-        $response =  curl_exec($this->ovirt_ch);
+        $response = curl_exec($this->ovirt_ch);
         // Re-initialize original headers for new requests
         curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, $tmp_headers);
 
@@ -269,6 +320,7 @@ class OvirtApi
     }
 
     /**
+     * Returns current active datacenter, if none is set, return the first
      * @return DataCenter
      */
     public function getCurrentDatacenter() {
@@ -281,8 +333,9 @@ class OvirtApi
     }
 
     /**
+     * Retrieve information about all the datacenters
      * @param null $search
-     * @return array
+     * @return array datacenters[]
      */
     public function getDatacenters($search = null) {
         $search = is_null($search) ? '' : $search;
@@ -295,7 +348,8 @@ class OvirtApi
     }
 
     /**
-     * @param $datacenter_id
+     * Retrieve a single datacenter with id $datacenter_id
+     * @param string $datacenter_id
      * @return DataCenter
      */
     public function getDatacenter($datacenter_id) {
@@ -303,6 +357,7 @@ class OvirtApi
     }
 
     /**
+     * Returns current active Cluster, if none is set, return the first
      * @return Cluster
      */
     public function getCurrentCluster() {
@@ -315,8 +370,9 @@ class OvirtApi
     }
 
     /**
+     * Retrieve all clusters
      * @param null $search
-     * @return array
+     * @return array clusters[]
      */
     public function getClusters($search = null) {
         $search = is_null($search) ? '' : $search;
@@ -329,7 +385,8 @@ class OvirtApi
     }
 
     /**
-     * @param $cluster_id
+     * Retrieve a single cluster with id $cluster_id
+     * @param string $cluster_id
      * @return Cluster
      */
     public function getCluster($cluster_id) {
@@ -337,8 +394,9 @@ class OvirtApi
     }
 
     /**
+     * Retrieve all the hosts
      * @param null $search
-     * @return array
+     * @return array hosts[]
      */
     public function getHosts($search = null) {
         $search = is_null($search) ? '' : $search;
@@ -351,7 +409,8 @@ class OvirtApi
     }
 
     /**
-     * @param $host_id
+     * Retrieve a specific host with id $host_id
+     * @param string $host_id
      * @return Host
      */
     public function getHost($host_id) {
@@ -359,8 +418,9 @@ class OvirtApi
     }
 
     /**
+     * Retrieve all the storage domains
      * @param null $search
-     * @return array
+     * @return array storageDomains[]
      */
     public function getStorageDomains($search = null) {
         $search = is_null($search) ? '' : $search;
@@ -373,7 +433,8 @@ class OvirtApi
     }
 
     /**
-     * @param $domain_id
+     * Retrieve a specific storage domain with id $domain_id
+     * @param string $domain_id
      * @return StorageDomain
      */
     public function getStorageDomain($domain_id) {
@@ -381,8 +442,9 @@ class OvirtApi
     }
 
     /**
+     * Retrieve all vms
      * @param null $search
-     * @return array
+     * @return array vms[]
      */
     public function getVms($search = null) {
         $search = is_null($search) ? '' : $search;
@@ -395,7 +457,8 @@ class OvirtApi
     }
 
     /**
-     * @param $vm_id
+     * Retrieve a specific vm with id $vm_id
+     * @param string $vm_id
      * @return Vm
      */
     public function getVm($vm_id) {
@@ -403,102 +466,195 @@ class OvirtApi
     }
 
     /**
-     * @param $data
+     * Create a new VM
+     * @param array $data
      * @return Vm
      */
     public function createVm($data) {
-        // Make sure $data is properly formatted and capitalized where needed e.g. the 'default' cluster is not 'Default'..
+        /**
+         * Make sure $data is properly formatted and capitalized where needed e.g. the 'Default' cluster is not 'default'..
+         * To fully know what options / values are allowed we refer to your API (<your-base-url>/api/capabilities)
+         *
+         * Example:
+         * $data = array(
+         *   'name'      => 'VM-test',
+         *   'cluster'   => array(
+         *      'name'  => 'Default',
+         *   ),
+         *   'template'  => array(
+         *      'name'  => 'Blank',
+         *   ),
+         *   'memory'    => '536870912',
+         *   'os'        => array(
+         *      'type'  => 'linux',
+         *      'boot'  => array(
+         *          'dev'   =>  'hd',
+         *   )
+         *   ),
+         *   'profile'   => 'server',
+         *   'display'   => array (
+         *      'type'      => 'spice',
+         *      'address'   => '10.11.0.116',
+         *      'port'      => '5900',
+         *      'secure_port'   => '',
+         *      'subject'   => '',
+         *      'monitors'  => '1',
+         *   ),
+         *   'cpu'       => array(
+         *      'cores' => '2',
+         *      'sockets'   => '2',
+         *   ),
+         *   );
+         *
+         */
          return new Vm($this, $this->postResource('vms/', Vm::toXML($data)));
     }
 
 
     /**
-     * @param $id
-     * @return IFace
+     * Delete a VM resource with id $vm_id
+     * @param string $vm_id
+     * @return void
      */
-    public function deleteVm($id) {
-        $this->deleteResource('vms/' . $id);
+    public function deleteVm($vm_id) {
+        $this->deleteResource('vms/' . $vm_id);
     }
 
     /**
-     * @param $data
+     * Update a VM with new options / values
+     * @param string $vm_id
+     * @param array $data
      * @return Vm
      */
-    public function updateVm($data) {
-        // Make sure $data is properly formatted and capitalized where needed e.g. the 'default' cluster is not 'Default'..
-        return new Vm($this, $this->putResource('vms/', Vm::toXML($data)));
+    public function updateVm($vm_id, $data) {
+        /*
+         *  Make sure $data is properly formatted and capitalized, only supply keys for the values you wish to change.
+         *  Everything else will remain as is. Refer to createVm for a complete syntax example
+         */
+        return new Vm($this, $this->putResource('vms/' . $vm_id, Vm::toXML($data)));
     }
 
     /**
-     * @param $data
-     * @return Vm
+     * This method is used to set a ticket which will grant the user SPLICE/VNC access to the specified VM
+     * @param string $vm_id
+     * @param int $expiry   Time left until expiration
+     * @return string Ticket
      */
     public function setTicket($vm_id, $expiry) {
-        // Make sure $data is properly formatted and capitalized where needed e.g. the 'default' cluster is not 'Default'..
-        return new Vm($this, $this->postResource('vms/' . $vm_id . '/ticket', Vm::getTicket($expiry)));
+        $response = $this->postResource('vms/' . $vm_id . '/ticket', Vm::getTicket($expiry));
+        return $response->ticket->value;
     }
 
 
     /**
-     * @param $data
+     * Create a new NIC for the specified VM with id $vm_id
+     * @param array $data
      * @return IFace
      */
     public function createInterface($vm_id, $data) {
-        // Make sure $data is properly formatted and capitalized where needed e.g. the 'default' cluster is not 'Default'..
+        /**
+         * Make sure $data is properly formatted and capitalized where needed
+         * To fully know what options / values are allowed we refer to your API (<your-base-url>/api/capabilities)
+         *     $nic = array(
+         *          'name'      => 'nic3',
+         *          'interface' => 'virtio',
+         *          'plugged'   => 'true',
+         *          'network'   => array(
+         *              'name'  => 'ovirtmgmt',
+         *          ),
+         *      );
+         */
         return new IFace($this, $this->postResource('vms/' . $vm_id . '/nics', IFace::toXML($data)));
     }
 
     /**
-     * @param $id
+     * Delete NIC $nic_id on the specified VM with id $vm_id
+     * @param string $vm_id
+     * @param string $nic_id
+     * @return void
      */
-    public function deleteInterface($vm_id, $id) {
-       $this->deleteResource('vms/' . $vm_id . '/nics/' . $id);
+    public function deleteInterface($vm_id, $nic_id) {
+       $this->deleteResource('vms/' . $vm_id . '/nics/' . $nic_id);
     }
 
     /**
-     * @param $data
+     * Update an interface with new options / values
+     * @param array $data
      * @return IFace
      */
-    public function updateInterface($vm_id, $id, $data) {
-        // Make sure $data is properly formatted and capitalized where needed e.g. the 'default' cluster is not 'Default'..
-        return new IFace($this, $this->putResource('vms/' . $vm_id . '/nics/' . $id, IFace::toXML($data)));
+    public function updateInterface($vm_id, $nic_id, $data) {
+        /*
+         *  Make sure $data is properly formatted and capitalized, only supply keys for the values you wish to change.
+         *  Everything else will remain as is. Refer to createInterface for an example
+         */
+        return new IFace($this, $this->putResource('vms/' . $vm_id . '/nics/' . $nic_id, IFace::toXML($data)));
     }
 
     /**
-     * @param $data
+     * Create a new disk for the specified VM with id $vm_id
+     * @param string $vm_id
+     * @param array $data
+     * @return Volume
      */
     public function createVolume($vm_id, $data) {
-        // Make sure $data is properly formatted and capitalized where needed e.g. the 'default' cluster is not 'Default'..
+        /**
+         * Make sure $data is properly formatted and capitalized where needed
+         * To fully know what options / values are allowed we refer to your API (<your-base-url>/api/capabilities)
+         *    $disk_test = array(
+         *      'name'              => 'new-disk',
+         *      'storage_domain'    => '23b600ed-0d96-415e-b356-08c336f4415e',
+         *      'interface'         => 'virtio',
+         *      'size'              => '10737418240',
+         *      'type'              => 'system',
+         *      'format'            => 'cow',
+         *      'bootable'          => 'false',
+         *      'shareable'         => 'false',
+         *      'sparse'            => 'true',
+         *    );
+         */
         return new Volume($this, $this->postResource('vms/' . $vm_id . '/disks', Volume::toXML($data)));
     }
 
     /**
-     * @param $id
-     * @return IFace
+     * Delete disk $disk_id for the specified VM with id $vm_id
+     * @param string $vm_id
+     * @param string $disk_id
+     * @return void
      */
-    public function deleteVolume($vm_id, $id) {
-        $this->deleteResource('vms/' . $vm_id . '/disks/' . $id);
+    public function deleteVolume($vm_id, $disk_id) {
+        $this->deleteResource('vms/' . $vm_id . '/disks/' . $disk_id);
     }
 
     /**
-     * @param $data
+     * Create a new template for the specified VM with id $vm_id
+     * @param string $vm_id: the VM of which to make a template of
+     * @param array $data
+     * @return Template
      */
     public function createTemplate($data) {
-        // Make sure $data is properly formatted and capitalized where needed e.g. the 'default' cluster is not 'Default'..
+        /*
+         * Make sure your $data is formatted properly. An example:
+         *     $template_test = array(
+         *       'name'      => 'template-test',
+         *       'vm_id'     => 'a27d2ff7-33e4-4bcb-a748-99e9204d9b61',
+         *     );
+         */
         return new Template($this, $this->postResource('templates/', Template::toXML($data)));
     }
 
     /**
-     * @param $id
-     * @return IFace
+     * Delete template with id $template_id
+     * @param string $template_id
+     * @return void
      */
-    public function deleteTemplate($id) {
-        $this->deleteResource('templates/'. $id);
+    public function deleteTemplate($template_id) {
+        $this->deleteResource('templates/'. $template_id);
     }
 
     /**
+     * Get all templates
      * @param null $search
-     * @return array
+     * @return array templates[]
      */
     public function getTemplates($search = null) {
         $search = is_null($search) ? '' : $search;
@@ -511,14 +667,15 @@ class OvirtApi
     }
 
     /**
-     * @param $host_id
-     * @return StorageDomain
+     * @param string $template_id
+     * @return Template
      */
     public function getTemplate($template_id) {
         return new Template($this, $this->getResource(sprintf('templates/%s', urlencode($template_id))));
     }
 
     /**
+     * Returns the version of the currently used API
      * @return string
      */
     public function getApiVersion() {
@@ -528,6 +685,7 @@ class OvirtApi
     }
 
     /**
+     * Checks wether or not the floppy hook is present
      * @return boolean
      */
     public function floppyHook() {
@@ -549,6 +707,7 @@ class OvirtApi
     }
 
     /**
+     * Returns the base url of the application
      * @return string
      */
     public function base_url() {
@@ -556,6 +715,7 @@ class OvirtApi
     }
 
     /**
+     * Convert response to XML
      * @param $response
      */
     protected function parseResponse($response) {
