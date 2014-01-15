@@ -31,6 +31,10 @@ class BaseObject
         $this->name = $name;
     }
 
+    /**
+     * Extracts the version of the API from the XML
+     * @return array
+     */
     public function parseVersion($xml) {
         $arr = (array)$xml;
         return $arr['@attributes']['major'] . '.' . $arr['@attributes']['minor'];

@@ -32,6 +32,11 @@ class StorageDomain extends BaseObject
         $this->_parse_xml_attributes($xml);
     }
 
+    /**
+     * Parses XML to an easy to read / manipulate array
+     * @param SimpleXMLElement
+     * @return $array
+     */
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
         $this->used = $xml->used->__toString();
         $this->available = $xml->available->__toString();

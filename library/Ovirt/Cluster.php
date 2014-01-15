@@ -30,16 +30,30 @@ class Cluster extends BaseObject
         $this->_parse_xml_attributes($xml);
     }
 
+    /**
+     * Parses XML to an easy to read / manipulate array
+     * @param SimpleXMLElement
+     * @return $array
+     */
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
         $this->description = (strlen($xml->description->__toString())>0) ? $xml->description->__toString(): null;
         $this->version = $this->parseVersion($xml->version);
         $this->datacenter = $xml->data_center->attributes()['id']->__toString();
     }
 
+    /**
+     * Retrieves version information of Ovirt, of the node that manages the cluster
+     * @return $array
+     */
     public function getVersion() {
         return $this->version;
     }
 
+    /**
+     * Retrieves all available network for the cluster
+     * @param $id       cluster-id
+     * @return $array
+     */
     public function getNetworks($id = null) {
         if(is_null($id)) {
             $id = $this->id;

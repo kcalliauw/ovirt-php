@@ -65,6 +65,7 @@ class IFace extends BaseObject{
     }
 
     /**
+     * Parses XML to an easy to read / manipulate array
      * @param SimpleXMLElement
      * @return $array
      */

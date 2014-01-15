@@ -36,6 +36,7 @@ class Volume extends BaseObject{
     }
 
     /**
+     * Parses an array of data into XML-format that c an be used to create a Volume
      * @param $array
      * @return SimpleXMLElement
      */
@@ -81,6 +82,7 @@ class Volume extends BaseObject{
     }
 
     /**
+     * Parses XML to an easy to read / manipulate array
      * @param SimpleXMLElement
      * @return $array
      */
@@ -98,7 +100,7 @@ class Volume extends BaseObject{
         if(!empty($xml->vm)) {
             $this->vm = $xml->vm->attributes()['id'];
         }
-    }
 
-    // TODO: Parse self to XML
+       return $xml->asXML();
+    }
 }

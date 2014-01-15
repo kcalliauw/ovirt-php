@@ -32,6 +32,11 @@ class DataCenter extends BaseObject
         parent::__construct($api, $xml->attributes()['id']->__toString(), $xml->attributes()['href']->__toString(), $xml->name->__toString());
     }
 
+    /**
+     * Parses XML to an easy to read / manipulate array
+     * @param SimpleXMLElement
+     * @return $array
+     */
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
         $this->description = (strlen($xml->description->__toString())>0) ? $xml->description->__toString(): null;
         $this->status = $xml->status->state->__toString();

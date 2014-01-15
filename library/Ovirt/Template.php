@@ -27,6 +27,7 @@ class Template extends BaseObject{
     public $creation_time = null;
     public $os = null;
     public $storage = null;
+    public $volumes = null;
     public $display = null;
     public $profile = null;
     public $memory = null;
@@ -41,16 +42,14 @@ class Template extends BaseObject{
      * @return SimpleXMLElement
      */
     public static function toXML($data) {
-        // Initialize VM XML Element
+        // Initialize Template XML Element
         $xml = new SimpleXMLElement('<template/>');
-        // Parse array to elements
         # Name
         if(array_key_exists('name', $data)) {
             $xml->addChild('name', $data['name']);
         } # VM
         if(array_key_exists('vm_id', $data)) {
             $vm = $xml->addChild('vm');
-//            $vm->addChild('id', $data['vm_id']);
             $vm->addAttribute('id', $data['vm_id']);
         }
         var_dump($xml);
@@ -58,6 +57,7 @@ class Template extends BaseObject{
     }
 
     /**
+     * Parses XML to an easy to read / manipulate array
      * @param SimpleXMLElement
      * @return $array
      */
@@ -77,53 +77,39 @@ class Template extends BaseObject{
             'type'  => $xml->os->attributes()['type']->__toString(),
             'boot'  => $boot,
         );
-        # Storage
-        $disks = $this->client->getResource('templates/' . $this->id . '/disks');
-        $disk_size = 0;
-        foreach($disks as $disk) {
-            $disk_size += $disk->size->__toString();
+//        # Storage
+//        $disks = $this->client->getResource('templates/' . $this->id . '/disks');
+//        $disk_size = 0;
+//        foreach($disks as $disk) {
+//            $disk_size += $disk->size->__toString();
+//        }
+//        $this->storage = $disk_size;
+        // Get disks
+        if(isset($xml->disks)) {
+            $disks = array();
+            $data = $xml->disks;
+            foreach($data->disk as $disk) {
+                $disk = array(
+                    'name'  =>  $disk->name->__toString(),
+                    'id'    =>  $disk->attributes()->id->__toString(),
+                    'size'  =>  $disk->size->__toString(),
+                );
+                $disks[] = $disk;
+            }
+            $this->volumes = $disks;
         }
-        $this->storage = $disk_size;
+
+        // Calculate total disk space spread over all volumes
+        $total_disk_size = 0;
+        if(!is_null($this->volumes)) {
+            foreach($this->volumes as $volume)
+                $total_disk_size += $volume['size'];
+        }
+        $this->storage = $total_disk_size;
         # Display
         $this->display = array(
             'type'      => $xml->display->type->__toString(),
             'monitors'  => $xml->display->monitors->__toString(),
         );
     }
-
-    /**
-     * @param $id
-     * @return IFace[]
-     */
-    public function getInterfaces($id = null) {
-        if(is_null($id)) {
-            $id = $this->id;
-        }
-        $interfaces = array();
-        $response = $this->client->getResource('templates/' . $id . '/nics');
-        foreach($response as $item) {
-            $interfaces[] = new IFace($this->client, $item);
-        }
-        return $interfaces;
-    }
-
-    /**
-     * @param $id
-     * @return Volume[]
-     */
-    public function getVolumes($id = null) {
-        if(is_null($id)) {
-            $id = $this->id;
-        }
-
-        $volumes = array();
-        $response = $this->client->getResource('templates/' . $id . '/disks');
-        foreach($response as $item) {
-            $volumes[] = new Volume($this->client, $item);
-        }
-
-        return $volumes;
-    }
-
-    // TODO: create_template, destroy_template
 }

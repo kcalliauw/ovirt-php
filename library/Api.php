@@ -149,9 +149,8 @@ class OvirtApi
      */
     private function isCustomRequest() {
         $info = curl_getinfo($this->ovirt_ch);
-        // If URL contains an ID of any kind, a custom request was made
+        // If URL contains an ID of any kind, a custom request (PUT / DELETE) was made
         $isCustom = preg_match('/[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}/', $info['url']);
-
         return $isCustom;
     }
 
@@ -167,18 +166,7 @@ class OvirtApi
             throw new MissingParametersException('A resource is required');
 
         $response = $this->_get($this->url . $resource);
-        /**
-         * Newly created VMs contain no disk / nic yet, upon creatin a VM it will attempt to call upon its disks / nics which are non-existant
-         * The error is "caught" here and bypassed by returning a null value
-         *
-         * TEMPORARY FIX
-         */
-        // TODO: Only attempt to pregmatch when trying to access disk or nic rescource
-        if(preg_match('/Error report/i', $response)) {
-            return null;
-        }
-        else
-            return new SimpleXMLElement($response);
+         return new SimpleXMLElement($response);
 	}
 
     /**
@@ -191,8 +179,17 @@ class OvirtApi
         if($this->isCustomRequest($url))
             $this->initCurl($this->insecure);
 
+        // When retrieving a VM we need to make sure to get all information
+        if(preg_match('/vms/', $url)) {
+            $headers = array(
+                'Accept' => "application/xml; detail=disks; detail=nics; detail=hosts",
+            );
+            $this->addHeaders($headers);
+        }
+
         curl_setopt($this->ovirt_ch, CURLOPT_URL, $url);
         curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, $this->_getHeaders());
+        curl_setopt($this->ovirt_ch, CURLOPT_POST, false);
         $response =  curl_exec($this->ovirt_ch);
         if($response!==false) {
             return $response;
@@ -208,13 +205,12 @@ class OvirtApi
      * @throws MissingParametersException
      */
     public function postResource($resource = null, $data = null) {
-        echo '=== POSTING ===';
         if(is_null($resource)) {
             throw new MissingParametersException('A resource is required');
         }
+
         $response = $this->_post($this->url . $resource, $data);
         $xml = new SimpleXMLElement($response);
-        echo '=== DONE POSTING ===';
         return $xml;
     }
 
@@ -265,6 +261,7 @@ class OvirtApi
     protected function _put($url, $data) {
         curl_setopt($this->ovirt_ch, CURLOPT_URL, $url);
         curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, $this->_getHeaders());
+        curl_setopt($this->ovirt_ch, CURLOPT_POST, false);
         curl_setopt($this->ovirt_ch, CURLOPT_CUSTOMREQUEST, 'PUT');
         curl_setopt($this->ovirt_ch, CURLOPT_POSTFIELDS, $data);
         $response =  curl_exec($this->ovirt_ch);
@@ -300,6 +297,7 @@ class OvirtApi
         curl_setopt($this->ovirt_ch, CURLOPT_URL, $url);
         curl_setopt($this->ovirt_ch, CURLOPT_HTTPHEADER, $this->_getHeaders());
         curl_setopt($this->ovirt_ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
+        curl_setopt($this->ovirt_ch, CURLOPT_POST, false);
         curl_setopt($this->ovirt_ch, CURLOPT_USERPWD, $this->username . ':' . $this->password);
         if(!is_null($data)) {
             curl_setopt($this->ovirt_ch, CURLOPT_POSTFIELDS, $data);
@@ -462,7 +460,10 @@ class OvirtApi
      * @return Vm
      */
     public function getVm($vm_id) {
-        return new Vm($this, $this->getResource(sprintf('vms/%s', urlencode($vm_id))));
+        $vm = new Vm($this, $this->getResource(sprintf('vms/%s', urlencode($vm_id))));
+//        $this->resetHeaders();
+
+        return $vm;
     }
 
     /**
@@ -507,7 +508,9 @@ class OvirtApi
          *   );
          *
          */
-         return new Vm($this, $this->postResource('vms/', Vm::toXML($data)));
+
+        $vm = $this->postResource('vms/', Vm::toXML($data));
+        return new Vm($this, $vm);
     }
 
 
@@ -533,18 +536,6 @@ class OvirtApi
          */
         return new Vm($this, $this->putResource('vms/' . $vm_id, Vm::toXML($data)));
     }
-
-    /**
-     * This method is used to set a ticket which will grant the user SPLICE/VNC access to the specified VM
-     * @param string $vm_id
-     * @param int $expiry   Time left until expiration
-     * @return string Ticket
-     */
-    public function setTicket($vm_id, $expiry) {
-        $response = $this->postResource('vms/' . $vm_id . '/ticket', Vm::getTicket($expiry));
-        return $response->ticket->value;
-    }
-
 
     /**
      * Create a new NIC for the specified VM with id $vm_id
@@ -667,6 +658,7 @@ class OvirtApi
     }
 
     /**
+     * Get a specific template with id $id
      * @param string $template_id
      * @return Template
      */
@@ -675,7 +667,7 @@ class OvirtApi
     }
 
     /**
-     * Returns the version of the currently used API
+     * Returns the version of the currently used Ovirt Installation
      * @return string
      */
     public function getApiVersion() {

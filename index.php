@@ -27,39 +27,49 @@
     }
 
      /* ==================================== Testing Grounds ====================================== */
-    // Params
-    $vm_test = array(
-        'name'      => 'VM-' . time() . '-test',
-        'cluster'   => array(
-            'name'  => 'Default',
-        ),
-        'template'  => array(
-            'name'  => 'Blank',
-        ),
-        'memory'    => '536870912',
-        'os'        => array(
-            'type'  => 'linux',
-            'boot'  => array(
-                'dev'   =>  'hd',
-            )
-        ),
-        'profile'   => 'server',
-        'display'   => array (
-            'type'      => 'spice',
-            'address'   => '10.11.0.116',
-            'port'      => '5900',
-            'secure_port'   => '',
-            'subject'   => '',
-            'monitors'  => '1',
-        ),
-        'cpu'       => array(
-            'cores' => '2',
-            'sockets'   => '2',
+    $vm = $api->getVm('a27d2ff7-33e4-4bcb-a748-99e9204d9b61');
+
+//    $vm->action('shutdown', null);
+    /*<action>
+        <pause>true</pause>
+        <vm>
+            <stateless>true</stateless>
+            <display>
+                <type>spice</type>
+            </display>
+            <os>
+                <boot dev="cdrom"/>
+            </os>
+            <cdroms>
+                <cdrom>
+                    <file id="windows-xp.iso"/>
+                </cdrom>
+            </cdroms>
+            <domain>
+                <name>domain.example.com</name>
+                <user>
+                    <user_name>domain_user</user_name>
+                    <password>domain_password</password>
+                </user>
+            </domain>
+            <placement_policy>
+                <host id="02447ac6-bcba-448d-ba2b-f0f453544ed2"/>
+            </placement_policy>
+        </vm>
+    </action>*/
+
+    $action = array(
+        'pause' =>  'true',
+        'vm'    => array(
+            'stateless' =>  'true',
+            'display'   =>  'SPICE',
+            'boot_dev'  =>  'cdrom',
+            'host_id'   =>  'b9194845-f09f-4928-b834-f499554983e3',
         ),
     );
 
-//    $api->deleteVm('');
-    $api->createVm($vm_test);
+//    $vm->action('suspend', $action);
+    $vm->action('start', $action);
 
     /* ============================================================================================= */
     echo "<h1>oVirt User portal</h1>";

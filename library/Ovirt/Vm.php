@@ -18,6 +18,7 @@
 
 require_once('BaseObject.php');
 require_once('Volume.php');
+require_once('IFace.php');
 
 class Vm extends BaseObject{
 
@@ -42,20 +43,12 @@ class Vm extends BaseObject{
         parent::__construct($client, $xml->attributes()['id']->__toString(), $xml->attributes()['href']->__toString(), $xml->name->__toString());
         $this->_parse_xml_attributes($xml);
     }
-
-    public static function getTicket($expiry) {
-        $xml = new SimpleXMLElement('<action/>');
-        $ticket = $xml->addChild('ticket');
-        $ticket->addChild('expiry', $expiry);
-
-        return $xml->asXML();
-    }
-
     /**
      * @param $array
      * @return SimpleXMLElement
      */
     public static function toXML($data) {
+//        d($data);
         // Initialize VM XML Element
         $xml = new SimpleXMLElement('<vm/>');
         // Parse array to elements
@@ -116,10 +109,11 @@ class Vm extends BaseObject{
         if(array_key_exists('quota', $data)) {
             $xml->addChild('quota', $data['quota']);
         }
-        return $xml->asXML();
+      return $xml->asXML();
     }
 
     /**
+     * Parses XML to an easy to read / manipulate array
      * @param SimpleXMLElement
      * @return $array
      */
@@ -134,17 +128,42 @@ class Vm extends BaseObject{
         $this->cores = $xml->cpu->topology->attributes()['cores']->__toString();
         $this->creation_time = $xml->creation_time->__toString();
         $this->quota = $xml->quota->__toString();
-        $this->interfaces = $this->getInterfaces();
-        $this->volumes = $this->getVolumes();
-        // Newly created VMs dont have disks, ergo no disk size can be calculated
-        if(!is_null($this->volumes)) {
-            # Storage
-            $disk_size = 0;
-            foreach($this->volumes as $volume) {
-                $disk_size += $volume->size;
+        // Get NICs
+        if(isset($xml->nics)) {
+            $ifs = array();
+            $data = $xml->nics;
+            foreach($data->nic as $nic) {
+                $nic = array(
+                    'name'  =>  $nic->name->__toString(),
+                    'id'    =>  $nic->attributes()->id->__toString(),
+                );
+                $ifs[] = $nic;
             }
-            $this->storage = $disk_size;
+            $this->interfaces = $ifs;
         }
+        // Get disks
+        if(isset($xml->disks)) {
+            $disks = array();
+            $data = $xml->disks;
+            foreach($data->disk as $disk) {
+                $disk = array(
+                    'name'  =>  $disk->name->__toString(),
+                    'id'    =>  $disk->attributes()->id->__toString(),
+                    'size'  =>  $disk->size->__toString(),
+                );
+                $disks[] = $disk;
+            }
+            $this->volumes = $disks;
+        }
+
+        // Calculate total disk space spread over all volumes
+        $total_disk_size = 0;
+        if(!is_null($this->volumes)) {
+            foreach($this->volumes as $volume)
+                $total_disk_size += $volume['size'];
+        }
+        $this->storage = $total_disk_size;
+
         # OS
         $boot = array();
         foreach($xml->os->boot as $dev) {
@@ -168,44 +187,13 @@ class Vm extends BaseObject{
             'address'   => $xml->display->address->__toString(),
             'port'      => $xml->display->port->__toString(),
         );
-
-        echo $this->id;
-        echo '==test==';
-
     }
 
-    private function getInterfaces() {
-        $interfaces = array();
-        $nics = $this->client->getResource('vms/' . $this->id . '/nics');
-        // Newly created VMs have no nics yet
-        if(is_null($nics)) {
-            return null;
-        } else {
-            foreach($nics as $nic) {
-                $interfaces[] = new IFace($this->client, $nic);
-            }
-            return $interfaces;
-        }
-    }
-
-    public function getQuota() {
-        return $this->quota;
-    }
-
-    private function getVolumes() {
-        $volumes = array();
-        $disks = $this->client->getResource('vms/' . $this->id . '/disks');
-        // Newly created disks have no disks yet
-        if(is_null($disks)) {
-            return null;
-        } else {
-            foreach($disks as $disk) {
-                $volumes[] = new Volume($this->client, $disk);
-            }
-            return $volumes;
-        }
-    }
-
+    /**
+     * This function verifies whether or not the machine is actually running up and running
+     * Use this as a check before doing certain at runtime operations
+     * @return bool
+     */
     public function isRunning() {
         // Possible states are: up, wait_for_launch, powering_up, powering_down, down, (locked)
         if($this->status == 'down' || $this->status == 'wait_for_launch') {
@@ -215,6 +203,10 @@ class Vm extends BaseObject{
         }
     }
 
+    /**
+     * Verifies whether the machine is up and open for writing transactions
+     * @return bool
+     */
     public function isReady() {
         // oVirt 3.1 can flag a VM as down and not locked, while it's volumes are locked, if 'true' is is safe to launch VM
         if(!$this->status == 'down') {
@@ -230,35 +222,98 @@ class Vm extends BaseObject{
         return true;
     }
 
-    public function vm_action($action, $boot_dev = null, $id = null) {
-        // TODO: Possible actions can be migrate, ticket, shutdown, start, stop, suspend, detach, move, export
+    /**
+     * Perform VM-specific action; used to manage VM
+     * @param string $action        Action to undertake
+     * @param array $opts           Depending on what action is being undertaken, supply additional options for the corresponding action
+     *                              Any settings altered by suppling additional options will be reset to it's original value when the VM reboots
+     * @return void
+     */
+    public function action($action, $opts = null) {
+        // Action XML Element
+        $xml = new SimpleXMLElement('<action/>');
         // Validate action
         switch($action) {
             case 'start':
-            break;
+                $vm = $xml->addChild('vm');
+                if(array_key_exists('stateless', $opts['vm']))
+                    $vm->addChild('stateless', $opts['vm']['stateless']);
+                if(array_key_exists('display', $opts['vm'])) {
+                    $display = $vm->addChild('display');
+                    $display->addChild('type', $opts['vm']['display']);
+                }
+                if(array_key_exists('boot_dev', $opts['vm'])) {
+                    $os = $vm->addChild('os');
+                    $boot = $os->addChild('boot');
+                    $boot->addAttribute('dev', $opts['vm']['boot_dev']);
+                }
+                if(array_key_exists('cdrom', $opts['vm'])) {
+                    $cdroms = $vm->addChild('cdroms');
+                    $cdrom = $cdroms->addChild('cdrom');
+                    $file = $cdrom->addChild('file');
+                    $file->addAttribute('id', $opts['vm']['cdrom']);
+                }
+                if(array_key_exists('domain', $opts['vm'])) {
+                    $domain = $vm->addChild('domain');
+                    $domain->addChild('name', $opts['vm']['domain']['name']);
+                    $user = $domain->addChild('user');
+                    $user->addChild('user_name', $opts['vm']['domain']['username']);
+                    $user->addChild('password', $opts['vm']['domain']['password']);
+                }
+                if(array_key_exists('host_id', $opts['vm'])) {
+                    $placement = $vm->addChild('placement_policy');
+                    $host = $placement->addChild('host');
+                    $host->addAttribute('id', $opts['vm']['host_id']);
+                }
+                // Only for Windows machines
+                if(array_key_exists('domain', $opts['vm'])) {
+                    $domain = $vm->addChild('domain');
+                    $domain->addChild('name', $opts['vm']['domain']['name']);
+                    $user = $domain->addChild('user');
+                    $user->addChild('user_name', $opts['vm']['domain']['username']);
+                    $user->addChild('password', $opts['vm']['domain']['password']);
+                }
+                break;
             case 'stop':
-            break;
+                break;
+            case 'suspend':
+                break;
+            case 'shutdown':
+                break;
+            case 'migrate':
+                if(array_key_exists('host_id', $opts['vm'])) {
+                    $host = $xml->addChild('host');
+                    $host->addAttribute('id', $opts['host_id']);
+                }
+                break;
+            case 'detach':
+                break;
+            case 'move':
+                $domain = $xml->addChild('storage_domain');
+                $domain->addChild('name', $opts['storage_name']);
+                break;
+            case 'export':
+                $domain = $xml->addChild('storage_domain');
+                $domain->addChild('name', $opts['storage_name']);
+                $xml->addChild('overwrite', $opts['overwrite']);
+                $xml->addChild('discard_snapshots', $opts['discard_snapshots']);
+                break;
             case 'default':
             throw new MissingParametersException('Invalid action specified.');
         }
-        // TODO: Keep ID? Makes more sense to perform actions on a vm object, rather than invoke a start-method for VMs by id
-        if(is_null($id)) {
-            $id = $this->id;
-        }
-        $xml = new SimpleXMLElement('<action/>');
-        $vm = $xml->addChild('vm');
-        $os = $vm->addChild('os');
-        // Possibility to boot from CD-Rom, HD..
-        if(!is_null($boot_dev)) {
-            $boot = $os->addChild('boot');
-            $boot->addAttribute('dev', $boot_dev);
-        }
-        $data = $xml->asXML();
-        $this->client->postRescource('vms/' . $id . '/' . $action, $data);
 
+        $data = $xml->asXML();
+        $this->client->postResource('vms/' . $this->id . '/' . $action, $data);
     }
 
-    /* TODO
-     * ticket           => used as password for SPICE
+    /**
+     * Set a ticket which will be used as the SPICE password in order to access to the VM, limited by time in seconds
+     * @param int $expiry   Time left until expiration
+     * @return string Ticket
      */
+    public function setTicket($expiry) {
+        $response = $this->postResource('vms/' . $this->id . '/ticket', Vm::getTicket($expiry));
+        return $response->ticket->value;
+    }
+
 }

@@ -30,6 +30,11 @@ class Host extends BaseObject
         $this->_parse_xml_attributes($xml);
     }
 
+    /**
+     * Parses XML to an easy to read / manipulate array
+     * @param SimpleXMLElement
+     * @return $array
+     */
     protected function _parse_xml_attributes(SimpleXMLElement $xml) {
         $this->description = (strlen($xml->description->__toString())>0) ? $xml->description->__toString(): null;
         $this->datacenter = $xml->cluster->attributes()['id']->__toString();
